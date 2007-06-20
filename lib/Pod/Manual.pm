@@ -1,5 +1,6 @@
 package Pod::Manual;
-use Class::Std;
+
+use Object::InsideOut;
 
 use warnings;
 no warnings qw/ uninitialized /;
@@ -16,23 +17,23 @@ use Pod::Manual::Docbook2LaTeX;
 
 use version; our $VERSION = qv('0.01');
 
-my %dom_of    : ATTR;
-my %parser_of : ATTR;
+my @dom_of    :Field;
+my @parser_of :Field;
 
-sub BUILD {
-    my ( $self, $id, $arg_ref ) = @_;
-    $$self = $id;
+sub _init :Init {
+    my $self = shift;
+    my $args_ref = shift;
 
-    my $parser = $parser_of{ $id } = XML::LibXML->new;
+    my $parser = $parser_of[ $$self ] = XML::LibXML->new;
 
-    $dom_of{ $id } = $parser->parse_string(
+    $dom_of[ $$self ] = $parser->parse_string(
         '<book><bookinfo><title/></bookinfo></book>' 
     );
 
-    $dom_of{ $id }->setEncoding( 'iso-8859-1' );
+    $dom_of[ $$self ]->setEncoding( 'iso-8859-1' );
 
-    if ( my $title = $arg_ref->{ title } ) {
-        my( $node ) = $dom_of{ $id }->findnodes( '/book/bookinfo/title' );
+    if ( my $title = $args_ref->{ title } ) {
+        my( $node ) = $dom_of[ $$self ]->findnodes( '/book/bookinfo/title' );
         $node->appendText( $title );
     }
 
@@ -55,7 +56,7 @@ sub _get_podxml {
     $podxml =~ s/xmlns=".*?"//;
     $podxml =~ s#]]></verbatim>\n<verbatim><!\[CDATA\[##g;
 
-    my $dom = eval { $parser_of{ $$self }->parse_string( $podxml ) 
+    my $dom = eval { $parser_of[ $$self ]->parse_string( $podxml ) 
     } or die "error while converting raw pod to xml: $@";
 
     return $dom;
@@ -71,7 +72,7 @@ sub add_chapter {
     my %options;
     %options = %{ pop @_ } if 'HASH' eq ref $_[-1];
 
-    my $dom = $dom_of{ $$self };
+    my $dom = $dom_of[ $$self ];
 
     for my $chapter ( @_ ) {
         my $podxml = $self->_get_podxml( $chapter ) 
@@ -97,12 +98,12 @@ sub add_chapter {
 
 sub as_dom {
     my $self = shift;
-    return $dom_of{ $$self };
+    return $dom_of[ $$self ];
 }
 
 sub as_docbook {
     my $self = shift;
-    my $dom = $dom_of{ $$self };
+    my $dom = $dom_of[ $$self ];
 
     return $dom->toString;
 }
@@ -131,6 +132,7 @@ sub as_pdf {
 }
 
 1; # Magic true value required at end of module
+
 __END__
 
 =head1 NAME
