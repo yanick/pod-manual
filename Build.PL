@@ -11,7 +11,7 @@ my $builder = Module::Build->new(
         'Test::More'        => 0,
         'version'           => 0,
         'Object::InsideOut' => 0,
-        'XML::XPathScript'  => '1.50',
+        'XML::XPathScript'  => '1.51',
     },
     add_to_cleanup      => [ 'Pod-Manual-*' ],
 );

@@ -7,6 +7,7 @@ no warnings qw/ uninitialized /;
 use strict;
 use Carp;
 
+use Cwd;
 use XML::LibXML;
 use Pod::DocBook;
 use Pod::XML;
@@ -15,12 +16,13 @@ use XML::XPathScript;
 use Pod::Manual::PodXML2Docbook;
 use Pod::Manual::Docbook2LaTeX;
 
-use version; our $VERSION = qv('0.01');
+our $VERSION = '0.01';
 
-my @parser_of   :Field;
-my @dom_of      :Field;
-my @appendix_of :Field;
-my @root_of     :Field;
+my @parser_of        :Field;
+my @dom_of           :Field;
+my @appendix_of      :Field;
+my @root_of          :Field;
+my @ignored_sections :Field;
 
 sub _init :Init {
     my $self = shift;
@@ -43,6 +45,10 @@ sub _init :Init {
         $node->appendText( $title );
     }
 
+    if ( my $x = $args_ref->{ignore_sections} ) {
+        push @{ $ignored_sections[ $$self ] }, ref $x ? @$x : $x ;
+    }
+
 }
 
 sub _get_podxml {
@@ -62,7 +68,8 @@ sub _get_podxml {
     $podxml =~ s/xmlns=".*?"//;
     $podxml =~ s#]]></verbatim>\n<verbatim><!\[CDATA\[##g;
 
-    my $dom = eval { $parser_of[ $$self ]->parse_string( $podxml ) 
+    my $dom = eval { 
+        $parser_of[ $$self ]->parse_string( $podxml ) 
     } or die "error while converting raw pod to xml: $@";
 
     return $dom;
@@ -112,6 +119,16 @@ sub add_chapter {
         }
     }
 
+    if ( $ignored_sections[ $$self ] ) {
+        my %to_ignore = map { $_ => 1 } @{ $ignored_sections[ $$self ] };
+        for my $section ( $subdoc->findnodes( 'section' ) ) {
+            my $title = $section->findvalue( 'title/text()' );
+            if ( $to_ignore{$title} ) {
+                $section->parentNode->removeChild( $section );
+            }
+        }
+    }
+
     return $self;
 }
 
@@ -138,27 +155,64 @@ sub as_docbook {
     return $dom->toString;
 }
 
-sub as_pdf {
+sub as_latex {
     my $self = shift;
-    my $filename = shift or die;
-    $filename .= '.tex';
-    my $docbook = $self->as_docbook;
+
     my $xps = XML::XPathScript->new;
 
-    my $latex = eval { $xps->transform( 
-         $docbook => $Pod::Manual::Docbook2LaTeX::stylesheet
+    my $docbook = eval { $xps->transform( 
+         $self->as_docbook => $Pod::Manual::Docbook2LaTeX::stylesheet
     ) } ;
+
+    croak "couldn't convert to docbook: $@" if $@;
+
+    return $docbook;
+}
+
+sub save_as_pdf {
+    my $self = shift;
+    my $filename = shift 
+        or croak 'save_as_pdf: requires a filename as an argument';
+
+    $filename =~ s/\.pdf$// 
+        or croak "save_as_pdf: filename '$filename'"
+                ."must have suffix '.pdf'";
+
+    my $original_dir = cwd();    # let's remember where we are
+
+    if ( $filename =~ s#^(.*)/## ) {
+        chdir $1 or croak "can't chdir to $1: $!";
+    }
+
+    for my $ext ( qw/ aux log pdf tex toc / ) {
+        next unless -e "$filename.$ext";
+
+        chdir $original_dir;
+        croak "file $filename.$ext already exists";
+        return 0;
+    }
+
+    my $latex = $self->as_latex;
 
    die $@ if $@;
 
-   open my $latex_fh, '>', $filename or die $!;
+   open my $latex_fh, '>', $filename.'.tex' 
+       or croak "can't write to '$filename.tex': $!";
    print {$latex_fh} $latex;
    close $latex_fh;
 
-   for ( 1..2 ) {
-    system 'pdflatex', $filename and die $!;
+    for ( 1..2 ) {       # two times to populate the toc
+        system "pdflatex $filename > /dev/null"
+            and croak "problem running pdflatex: $!";
     }
 
+   for my $ext ( qw/ aux log tex toc / ) {
+       unlink "$filename.$ext" or croak "can't delete '$filename.$ext': $!";
+   }
+
+    chdir $original_dir;
+
+    return 1;
 }
 
 sub _add_to_appendix {
@@ -190,7 +244,7 @@ Pod::Manual - Aggregates several PODs into a single manual
 
 =head1 VERSION
 
-This document describes Pod::Manual version 0.1
+This document describes Pod::Manual version 0.01
 
 As you can guess from the very low version number, this release
 is alpha quality. Use with caution.
@@ -209,90 +263,65 @@ is alpha quality. Use with caution.
 
 =head1 DESCRIPTION
 
-=for author to fill in:
-    Write a full description of the module and its features here.
-    Use subsections (=head2, =head3) as appropriate.
+The goal of B<Pod::Manual> is to gather the pod of several 
+modules into a comprehensive manual.  Its primary objective
+is to generate a document that can be printed, but it also
+allow to output the document into other formats 
+(e.g., docbook).
 
+=head1 METHODS
 
-=head1 INTERFACE 
+=head2 new( I< %options > )
 
-=for author to fill in:
-    Write a separate section listing the public components of the modules
-    interface. These normally consist of either subroutines that may be
-    exported, or methods that may be called on objects belonging to the
-    classes provided by the module.
-
-
-=head1 DIAGNOSTICS
-
-=for author to fill in:
-    List every single error and warning message that the module can
-    generate (even the ones that will "never happen"), with a full
-    explanation of each problem, one or more likely causes, and any
-    suggested remedies.
+Creates a new manual. Several options can be passed to the 
+constructor:
 
 =over
 
-=item C<< Error message here, perhaps with %s placeholders >>
+=item title => $title
 
-[Description of error here]
+Sets the title of the manual to I<$title>.
 
-=item C<< Another error message here >>
+=item ignore_sections => \@section_names
 
-[Description of error here]
-
-[Et cetera, et cetera]
+When importing pods, discards any section having its title listed
+in I<@section_names>.
 
 =back
 
+=head2 add_chapter( I<$module> )
 
-=head1 CONFIGURATION AND ENVIRONMENT
+    $manual->add_chapter( 'Pod::Manual' );
 
-=for author to fill in:
-    A full explanation of any configuration system(s) used by the
-    module, including the names and locations of any configuration
-    files, and the meaning of any environment variables or properties
-    that can be set. These descriptions must also include details of any
-    configuration language used.
-  
-Pod::Manual requires no configuration files or environment variables.
+Adds the pod of I<$module> to the manual.
 
+=head2 as_docbook( I< { css => $filename } > )
 
-=head1 DEPENDENCIES
+    print $manual->as_docbook({ css => 'stylesheet.css' });
 
-=for author to fill in:
-    A list of all the other modules that this module relies upon,
-    including any restrictions on versions, and an indication whether
-    the module is part of the standard Perl distribution, part of the
-    module's distribution, or must be installed separately. ]
+Returns the manual in a docbook format. If the option I<css> 
+is given, a 'xml-stylesheet' PI pointing to I<$filename> will
+be added to the document. 
 
-None.
+=head2 save_as_pdf( $filename )
 
+    $manual->save_as_pdf( '/path/to/document.pdf' );
 
-=head1 INCOMPATIBILITIES
+Saves the manual as a pdf file. Several temporary
+files will be created (and later on 
+cleaned up) in the same directory. If any of those files
+already exist, the method will abort.
 
-=for author to fill in:
-    A list of any modules that this module cannot be used in conjunction
-    with. This may be due to name conflicts in the interface, or
-    competition for system or program resources, or due to internal
-    limitations of Perl (for example, many modules that use source code
-    filters are mutually incompatible).
+Returns 1 if the pdf has been created, 0 otherwise.
 
-None reported.
+B<NOTE>: this function requires to have 
+TeTeX installed and I<pdflatex> accessible
+via the I<$PATH>.
 
 
 =head1 BUGS AND LIMITATIONS
 
-=for author to fill in:
-    A list of known problems with the module, together with some
-    indication Whether they are likely to be fixed in an upcoming
-    release. Also a list of restrictions on the features the module
-    does provide: data types that cannot be handled, performance issues
-    and the circumstances in which they may arise, practical
-    limitations on the size of data sets, special cases that are not
-    (yet) handled, etc.
-
-No bugs have been reported.
+As this is a preliminary release, a lot of both.
 
 Please report any bugs or feature requests to
 C<bug-pod-manual@rt.cpan.org>, or through the web interface at
