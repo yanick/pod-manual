@@ -122,7 +122,18 @@ sub as_dom {
 
 sub as_docbook {
     my $self = shift;
+    my %option = ref $_[0] eq 'HASH' ? %{ $_[0] } : () ;
+
     my $dom = $dom_of[ $$self ];
+
+    if ( my $css = $option{ css } ) {
+        # make a copy of the dom so that we're not stuck with the PI
+        $dom = $parser_of[ $$self ]->parse_string( $dom->toString );
+
+        my $pi = $dom->createPI( 'xml-stylesheet' 
+                                    => qq{href="$css" type="text/css"} );
+        $dom->insertBefore( $pi, $dom->firstChild );
+    }
 
     return $dom->toString;
 }
@@ -158,6 +169,9 @@ sub _add_to_appendix {
         $root_of[ $$self ]->appendChild( 
             $appendix_of[ $$self ] = $root_of[ $$self ]->new( 'appendix' )
         );
+        my $label = $appendix_of[ $$self ]->new( 'label' );
+        $label->appendText( 'Appendix' );
+        $appendix_of[ $$self ]->appendChild( $label );
     }
 
     $appendix_of[ $$self ]->appendChild( $_ ) for @nodes;
@@ -171,24 +185,28 @@ __END__
 
 =head1 NAME
 
-Pod::Manual - [One line description of module's purpose here]
+Pod::Manual - Aggregates several PODs into a single manual
 
 
 =head1 VERSION
 
-This document describes Pod::Manual version 0.0.1
+This document describes Pod::Manual version 0.1
+
+As you can guess from the very low version number, this release
+is alpha quality. Use with caution.
 
 
 =head1 SYNOPSIS
 
     use Pod::Manual;
 
-=for author to fill in:
-    Brief code example(s) here showing commonest usage(s).
-    This section will be as far as many users bother reading
-    so make it as educational and exeplary as possible.
-  
-  
+    my $manual = Pod::Manual->new({ title => 'Pod::Manual' });
+
+    $manual->add_chapter( 'Pod::Manual' );
+
+    my $docbook = $manual->as_docbook;
+
+
 =head1 DESCRIPTION
 
 =for author to fill in:
