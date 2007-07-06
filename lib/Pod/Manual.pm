@@ -17,8 +17,10 @@ use Pod::Manual::Docbook2LaTeX;
 
 use version; our $VERSION = qv('0.01');
 
-my @dom_of    :Field;
-my @parser_of :Field;
+my @parser_of   :Field;
+my @dom_of      :Field;
+my @appendix_of :Field;
+my @root_of     :Field;
 
 sub _init :Init {
     my $self = shift;
@@ -31,6 +33,10 @@ sub _init :Init {
     );
 
     $dom_of[ $$self ]->setEncoding( 'iso-8859-1' );
+
+    $root_of[ $$self ] = $dom_of[ $$self ]->documentElement;
+
+    $appendix_of[ $$self ] = undef;
 
     if ( my $title = $args_ref->{ title } ) {
         my( $node ) = $dom_of[ $$self ]->findnodes( '/book/bookinfo/title' );
@@ -63,37 +69,50 @@ sub _get_podxml {
 }
 
 sub add_chapters { 
-    add_chapter( @_ );
+    my $self = shift;
+    my $options = 'HASH' eq ref $_[-1] ?  %{ pop @_ } : { };
+
+    $self->add_chapter( $_ => $options ) for @_;
 }
 
 sub add_chapter {
     my $self = shift;
+    my $chapter = shift;
 
-    my %options;
-    %options = %{ pop @_ } if 'HASH' eq ref $_[-1];
+    my $options = 'HASH' eq ref $_[-1] ? pop @_ : { };
 
     my $dom = $dom_of[ $$self ];
 
-    for my $chapter ( @_ ) {
-        my $podxml = $self->_get_podxml( $chapter ) 
-            or croak "couldn't find pod for $chapter";
+    my $podxml = $self->_get_podxml( $chapter ) 
+        or croak "couldn't find pod for $chapter";
 
-        my $docbook = XML::XPathScript->new->transform( $podxml, 
-                $Pod::Manual::PodXML2Docbook::stylesheet );
+    my $docbook = XML::XPathScript->new->transform( $podxml, 
+            $Pod::Manual::PodXML2Docbook::stylesheet );
 
-        my $subdoc = eval { 
-            XML::LibXML->new->parse_string( $docbook )->documentElement;
-        };
+    my $subdoc = eval { 
+        XML::LibXML->new->parse_string( $docbook )->documentElement;
+    };
 
-        if ( $@ ) {
-            croak "chapter couldn't be converted to docbook: $@";
-        }
-
-        $dom->adoptNode( $subdoc );
-        $dom->documentElement->appendChild( $subdoc );
+    if ( $@ ) {
+        croak "chapter couldn't be converted to docbook: $@";
     }
 
-    return;
+    $dom->adoptNode( $subdoc );
+
+    # if there is no appendix, it adds the chapter
+    # at the end of the document
+    $root_of[ $$self ]->insertBefore( $subdoc, $appendix_of[ $$self ] );
+
+    if ( my $list = $options->{move_to_appendix} ) {
+        for my $section_title ( ref $list ? @{ $list  } : $list ) {
+            $self->_add_to_appendix( 
+                grep { $_->findvalue( 'title/text()' ) eq $section_title }
+                     $subdoc->findnodes( 'section' )
+            );
+        }
+    }
+
+    return $self;
 }
 
 sub as_dom {
@@ -129,6 +148,21 @@ sub as_pdf {
     system 'pdflatex', $filename and die $!;
     }
 
+}
+
+sub _add_to_appendix {
+    my ( $self, @nodes ) = @_;
+
+    unless ( $appendix_of[ $$self ] ) {
+        # create appendix
+        $root_of[ $$self ]->appendChild( 
+            $appendix_of[ $$self ] = $root_of[ $$self ]->new( 'appendix' )
+        );
+    }
+
+    $appendix_of[ $$self ]->appendChild( $_ ) for @nodes;
+
+    return $self;
 }
 
 1; # Magic true value required at end of module
