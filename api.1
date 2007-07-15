@@ -1,0 +1,7 @@
+use Pod::Manual;
+
+my $manual = Pod::Manual->new;
+
+$manual->import_chapter( 'XML::XPathScript' );
+
+print $manual->as_docbook;
