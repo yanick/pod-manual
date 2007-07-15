@@ -1,0 +1,5 @@
+(
+    'lib/Pod/Manual.pm' => [ qr/\$VERSION\s*=\s*'(.*?)';/, 
+                             qr/This document describes \S+ version (\S*)/ ],
+    'README' => qr/Pod-Manual version (\S+)/,
+);
