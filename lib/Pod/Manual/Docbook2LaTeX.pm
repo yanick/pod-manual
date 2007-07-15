@@ -14,6 +14,10 @@ our $stylesheet = <<'END_STYLESHEET';
     $Pod::Manual::Docbook2LaTeX::processor = $processor;
     $XML::XPathScript::Stylesheet::DocBook2LaTeX::processor = $processor;
     $template->import_template( $XML::XPathScript::Stylesheet::DocBook2LaTeX::template );
+    $template->set( code => { 
+        pre  => '<literal role="code">',
+        post => '</literal>' 
+    } );
 %><%~ / %>
 END_STYLESHEET
 
