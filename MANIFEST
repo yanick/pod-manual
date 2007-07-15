@@ -11,4 +11,4 @@ t/01general.t
 t/90pod-coverage.t
 t/91perlcritic.t
 t/92pod.t
-Makefile.PL
+examples/catalyst_manual.pl
