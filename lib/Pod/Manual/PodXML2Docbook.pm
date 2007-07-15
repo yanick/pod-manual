@@ -67,11 +67,15 @@ sub tc_title {
 }
 
 sub action_sect1 {
-    my $n = shift;
-    return   $n->findvalue( 'title/text()' ) eq 'NAME'
-           ? $DO_NOT_PROCESS 
-           : $DO_SELF_AND_KIDS
-           ;
+    my( $n, $t ) = @_;
+
+    my $title = $n->findvalue( 'title/text()' );
+
+    if ( $title eq 'DESCRIPTION' ) {
+        $t->set({ pre => '', showtag => 0 });
+    }
+
+    return $title eq 'NAME' ? $DO_NOT_PROCESS : $DO_SELF_AND_KIDS ;
 }
 
 $template->set( 'item' => { showtag => 0 } );
