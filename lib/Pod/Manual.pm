@@ -184,11 +184,11 @@ sub save_as_pdf {
         chdir $1 or croak "can't chdir to $1: $!";
     }
 
-    for my $ext ( qw/ aux log pdf tex toc / ) {
-        next unless -e "$filename.$ext";
-
+    my @temp_files = grep { -e } map "$filename.$_" => qw/ aux log pdf tex toc /;
+    if ( @temp_files ) {
         chdir $original_dir;
-        croak "file $filename.$ext already exists";
+        croak "temp files " . join( ' ', @temp_files )
+                            . " already exists, please remove";
         return 0;
     }
 
@@ -202,7 +202,7 @@ sub save_as_pdf {
    close $latex_fh;
 
     for ( 1..2 ) {       # two times to populate the toc
-        system "pdflatex $filename > /dev/null"
+        system "pdflatex -interaction=batchmode $filename > /dev/null"
             and croak "problem running pdflatex: $!";
     }
 
