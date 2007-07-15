@@ -303,6 +303,12 @@ Returns the manual in a docbook format. If the option I<css>
 is given, a 'xml-stylesheet' PI pointing to I<$filename> will
 be added to the document. 
 
+=head2 as_latex
+
+    print $manual->as_latex;
+
+Returns the manual in a LaTeX format.
+
 =head2 save_as_pdf( $filename )
 
     $manual->save_as_pdf( '/path/to/document.pdf' );

@@ -1,7 +1,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 7;
+use Test::More tests => 8;
 
 BEGIN { use_ok( 'Pod::Manual' ); }
 
@@ -16,16 +16,6 @@ my $manual = Pod::Manual->new({ title => 'The Manual Title',
 
 $manual->add_chapter( 'Pod::Manual' );
 
-my $pdf_file = 't/manual.pdf';
-
-SKIP: {
-    skip 'requires "pdflatex"', 2 if system 'pdflatex -h';
-
-    ok $manual->save_as_pdf( $pdf_file ), 'save_as_pdf()';
-    ok -e $pdf_file, 'pdf file exists';
-    unlink $pdf_file;
-}
-
 my $docbook = $manual->as_docbook;
 
 like $docbook => qr/The Manual Title/, 'new({ title => ... })';
@@ -33,4 +23,15 @@ unlike $docbook => qr/BUGS AND LIMITATIONS/, 'new({ ignore_sections => ... })';
 
 unlike $docbook => qr/xml-stylesheet.*<docbook>/, 'as_docbook() without css';
 
+my $latex = $manual->as_latex;
+ok length($latex), 'as_latex()';
 
+SKIP: {
+    skip 'requires "pdflatex"', 2 if system 'pdflatex -h';
+
+    my $pdf_file = 't/manual.pdf';
+
+    ok $manual->save_as_pdf( $pdf_file ), 'save_as_pdf()';
+    ok -e $pdf_file, 'pdf file exists';
+    unlink $pdf_file;
+}
