@@ -18,11 +18,13 @@ $manual->add_chapter( 'Pod::Manual' );
 
 my $pdf_file = 't/manual.pdf';
 
-ok $manual->save_as_pdf( $pdf_file ), 'save_as_pdf()';
+SKIP: {
+    skip 'requires "pdflatex"', 2 if system 'pdflatex -h';
 
-ok -e $pdf_file, 'pdf file exists';
-
-unlink $pdf_file;
+    ok $manual->save_as_pdf( $pdf_file ), 'save_as_pdf()';
+    ok -e $pdf_file, 'pdf file exists';
+    unlink $pdf_file;
+}
 
 my $docbook = $manual->as_docbook;
 
