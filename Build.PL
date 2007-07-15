@@ -14,6 +14,7 @@ my $builder = Module::Build->new(
         'XML::XPathScript'  => '1.51',
     },
     add_to_cleanup      => [ 'Pod-Manual-*' ],
+    create_makefile_pl  => 'passthrough',
 );
 
 $builder->create_build_script();

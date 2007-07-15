@@ -1,4 +1,5 @@
 Build.PL
+Makefile.PL
 Changes
 MANIFEST
 META.yml # Will be created by "make dist"
@@ -10,3 +11,4 @@ t/01general.t
 t/90pod-coverage.t
 t/91perlcritic.t
 t/92pod.t
+Makefile.PL
