@@ -1,4 +1,4 @@
-Pod-Manual version 0.1
+Pod-Manual version 0.02
 
 Pod::Manual is a module that gathers the pod of several 
 modules into a comprehensive manual.  Its primary objective
