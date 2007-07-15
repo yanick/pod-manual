@@ -70,7 +70,7 @@ sub _get_podxml {
 
     my $dom = eval { 
         $parser_of[ $$self ]->parse_string( $podxml ) 
-    } or die "error while converting raw pod to xml: $@";
+    } or die "error while converting raw pod to xml for '$pod': $@";
 
     return $dom;
 }
