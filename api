@@ -1,0 +1,15 @@
+
+my $manual = Pod::Manual->new({
+    title => 'Foo',
+    extract_authors_from_chapters => 1,
+    ignore_sections => [ qw/ COPYRIGHT  / ],
+});
+
+$manual->import_chapter( 'XML::XPathScript', 
+    { move_to_appendix => [ qw/ COPYRIGHT / ] } );
+
+$manual->get_dom;
+$manual->as_docbook;
+$manual->as_pdf;
+
+

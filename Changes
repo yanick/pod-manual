@@ -1,0 +1,17 @@
+Revision history for Pod-Manual
+
+0.04  16 Jul 2007
+    - Added Pod::XML dependency.
+
+0.03 15 Jul 2007
+    - Removed dependency on Pod::DocBook.
+
+0.02  14 Jul 2007  
+    - Added examples/ dir and catalyst_manual.pl.
+    - Added method as_latex() to Pod::Manual.
+    - Filled in README.
+    - Added Makefile.Pl support.
+
+0.01   6 Jul 2007 
+    - Initial release.
+
