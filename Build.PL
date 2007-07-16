@@ -12,6 +12,7 @@ my $builder = Module::Build->new(
         'version'           => 0,
         'Object::InsideOut' => 0,
         'XML::XPathScript'  => '1.51',
+        'Pod::XML'          => 0,
     },
     add_to_cleanup      => [ 'Pod-Manual-*' ],
     create_makefile_pl  => 'passthrough',
