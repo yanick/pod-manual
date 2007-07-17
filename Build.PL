@@ -8,6 +8,7 @@ my $builder = Module::Build->new(
     dist_author         => 'Yanick Champoux <yanick@cpan.org>',
     dist_version_from   => 'lib/Pod/Manual.pm',
     requires => {
+        'XML::LibXML'       => 0,
         'Test::More'        => 0,
         'version'           => 0,
         'Object::InsideOut' => 0,
