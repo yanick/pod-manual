@@ -7,8 +7,7 @@ use Pod::Manual;
 
 my $manual = Pod::Manual->new({ title => 'Catalyst' });
 
-$manual->add_chapter( $_ ) for qw/  
-                            Catalyst::Manual::About 
+$manual->add_chapters( qw/  Catalyst::Manual::About 
                             Catalyst::Manual::Actions
                             Catalyst::Manual::Cookbook
                             Catalyst::Manual::DevelopmentProcess
@@ -25,7 +24,7 @@ $manual->add_chapter( $_ ) for qw/
                             Catalyst::Manual::Tutorial::Testing
                             Catalyst::Manual::Tutorial::AdvancedCRUD
                             Catalyst::Manual::Tutorial::Appendices
-                            Catalyst::Manual::WritingPlugins /;
+                            Catalyst::Manual::WritingPlugins / );
 
 #print $manual->as_docbook; exit;
 $manual->save_as_pdf( 'catalyst_manual.pdf' );

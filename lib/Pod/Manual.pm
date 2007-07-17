@@ -294,6 +294,12 @@ in I<@section_names>.
 
 Adds the pod of I<$module> to the manual.
 
+=head2 add_chapters( I<@modules> )
+
+    $manual->add_chapters( 'Some::Module', 'Some::Other::Module' )
+
+Adds the pod of several modules to the manual.
+
 =head2 as_docbook( I< { css => $filename } > )
 
     print $manual->as_docbook({ css => 'stylesheet.css' });
