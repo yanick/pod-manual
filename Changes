@@ -1,5 +1,8 @@
 Revision history for Pod-Manual
 
+0.06 18 Jul 2007
+    - Changed test 01general for that it doesn't hang on different pdflatex.
+
 0.05 17 Jul 2007
     - Added XML::LibXML dependency.
     - Added method add_chapters().

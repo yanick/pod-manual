@@ -27,7 +27,7 @@ my $latex = $manual->as_latex;
 ok length($latex), 'as_latex()';
 
 SKIP: {
-    skip 'requires "pdflatex"', 2 if system 'pdflatex -h';
+    skip 'requires "pdflatex"', 2 if system 'pdflatex --version';
 
     my $pdf_file = 't/manual.pdf';
 
