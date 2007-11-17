@@ -338,6 +338,10 @@ Please report any bugs or feature requests to
 C<bug-pod-manual@rt.cpan.org>, or through the web interface at
 L<http://rt.cpan.org>.
 
+=head1 REPOSITORY
+
+Pod::Manual's development git repository can be accessed at
+http://babyl.dyndns.org/git/pod-manual.git.
 
 =head1 AUTHOR
 
