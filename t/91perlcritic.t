@@ -1,13 +1,14 @@
 use Test::More;
 
-$ENV{ TEST_AUTHOR } and eval q{
+$ENV{ TEST_AUTHOR } =~ /Pod::Manual/ and eval q{
     use Test::Perl::Critic;
     goto RUN_TESTS;
 };
 
 plan skip_all => $@
        ? 'Test::Perl::Critic not installed; skipping perlcritic testing'
-       : 'Set TEST_AUTHOR in your environment to enable these tests';
+       :   q{Set TEST_AUTHOR to 'Pod::Manual' in your environment }
+         . q{ to enable these tests};
 
 RUN_TESTS: 
 
