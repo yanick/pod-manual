@@ -1,0 +1,11 @@
+MANIFEST.SKIP
+\.git
+\.swp$
+_build
+Build
+Pod-Manual-.*?\.tar\.gz
+version.files
+api
+api.1
+api_test.t
+blib
