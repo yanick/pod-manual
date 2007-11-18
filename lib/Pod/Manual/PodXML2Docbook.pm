@@ -50,7 +50,7 @@ $template->set( emphasis => {
 
 $template->set( verbatim => { rename => 'screen' } );
 
-$template->set( title => { 
+0 && $template->set( title => { 
     showtag => 1,
     testcode => \&tc_title } );
 
@@ -79,35 +79,38 @@ sub action_sect1 {
 }
 
 $template->set( 'item' => { showtag => 0 } );
-$template->set( 'itemtext' => { action => $DO_NOT_PROCESS } );
+$template->set( 'itemtext' => { showtag => 0 } );
 
 sub tc_list {
     my ( $n, $t ) = @_;
     my $output;
 
-    if ( $n->findnodes( 'item/itemtext' ) ) { # we are a variable list
-            $output = '<variablelist>';
-            for my $c ( $n->findnodes('item') ) {
-                my $item = '<varlistentry>';
-                $item .= '<term>' . $c->findvalue( 'term/text()' ) . '</term>';
-                $item .= '<listitem>';
-                $item .= $processor->apply_templates( $c );
-                $item .= '</listitem>';
-                $item .= '</varlistentry>';
-                $output .= $item;
-            }
-            $output .= '</variablelist>';
-    }
-    else {  # we are a itemized list 
-        $output = '<itemizedlist>';
+    #if ( $n->findnodes( 'item/itemtext' ) ) { # we are a variable list
+    #        $output = '<variablelist>';
+    #        for my $c ( $n->findnodes('item') ) {
+    #            my $item = '<varlistentry>';
+    #            $item .= '<term>' . $c->findvalue( 'term/text()' ) . '</term>';
+    #            $item .= '<listitem>';
+    #            $item .= $processor->apply_templates( $c );
+    #            $item .= '</listitem>';
+    #            $item .= '</varlistentry>';
+    #            $output .= $item;
+    #        }
+    #        $output .= '</variablelist>';
+    #}
+    #else {  # we are a itemized list 
+    $output = '<itemizedlist>';
 
-        $output .= '<listitem>' 
-                 . $processor->apply_templates( $_ ) 
-                 . '</listitem>'
-            for $n->findnodes( 'item' );
-
-        $output .= '</itemizedlist>';
+    for ( $n->findnodes( 'item' ) ) {
+        $output .=  '<listitem>' 
+                .   $processor->apply_templates( $_ )
+                .   '</listitem>'
+                ;
     }
+
+    $output .= '</itemizedlist>';
+
+    #}
 
     $t->{pre} = $output;
 
