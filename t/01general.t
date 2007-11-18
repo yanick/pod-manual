@@ -35,4 +35,6 @@ SKIP: {
 
     ok $manual->save_as_pdf( $pdf_file ), 'save_as_pdf()';
     ok -e $pdf_file, 'pdf file exists';
+
+    unlink $pdf_file;
 }
