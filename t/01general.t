@@ -29,9 +29,10 @@ ok length($latex), 'as_latex()';
 SKIP: {
     skip 'requires "pdflatex"', 2 if system 'pdflatex --version';
 
+    skip "not running pdflatex as root for security reasons", 2 unless $>;
+
     my $pdf_file = 't/manual.pdf';
 
     ok $manual->save_as_pdf( $pdf_file ), 'save_as_pdf()';
     ok -e $pdf_file, 'pdf file exists';
-    unlink $pdf_file;
 }
