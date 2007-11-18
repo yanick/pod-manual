@@ -8,6 +8,7 @@ Revision history for Pod-Manual
         in environment variable TEST_AUTHOR.
     - The test generating a pdf file in t/01general.t now
         cleans after itself and deletes the pdf.
+    - Module is now signed.
 
 0.06 18 Jul 2007
     - Changed test 01general for that it doesn't hang on different pdflatex.

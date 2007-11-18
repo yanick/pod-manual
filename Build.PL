@@ -17,6 +17,7 @@ my $builder = Module::Build->new(
     },
     add_to_cleanup      => [ 'Pod-Manual-*' ],
     create_makefile_pl  => 'passthrough',
+    sign                => 1,
 );
 
 $builder->create_build_script();
