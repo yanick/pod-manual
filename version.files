@@ -2,4 +2,7 @@
     'lib/Pod/Manual.pm' => [ qr/\$VERSION\s*=\s*'(.*?)';/, 
                              qr/This document describes \S+ version (\S*)/ ],
     'README' => qr/Pod-Manual version (\S+)/,
+    'lib/Pod/Manual/Docbook2LaTeX.pm' => qr/\$VERSION\s*=\s*'(.*?)';/,
+    'lib/Pod/Manual/PodXML2Docbook.pm' => qr/\$VERSION\s*=\s*'(.*?)';/,
 );
+

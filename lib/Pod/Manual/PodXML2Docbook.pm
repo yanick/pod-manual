@@ -6,6 +6,8 @@ use warnings;
 use XML::XPathScript::Template;
 use XML::XPathScript::Processor;
 
+our $VERSION = '0.07';
+
 our $processor;
 
 our $stylesheet = <<'END_STYLESHEET';

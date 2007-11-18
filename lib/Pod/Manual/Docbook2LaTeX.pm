@@ -7,6 +7,8 @@ use XML::XPathScript::Template;
 use XML::XPathScript::Processor;
 use XML::XPathScript::Stylesheet::DocBook2LaTeX;
 
+our $VERSION = '0.07';
+
 our $stylesheet = <<'END_STYLESHEET';
 <%
     $XML::XPathScript::current->interpolating( 0 );
