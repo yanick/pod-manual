@@ -1,3 +1,7 @@
+use strict;
+use warnings;
+no warnings qw/ uninitialized /;
+
 use Test::More;
 
 $ENV{ TEST_AUTHOR } =~ /Pod::Manual/ and eval q{
