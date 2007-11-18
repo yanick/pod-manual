@@ -26,6 +26,8 @@ $manual->add_chapters( qw/  Catalyst::Manual::About
                             Catalyst::Manual::Tutorial::Appendices
                             Catalyst::Manual::WritingPlugins / );
 
-#print $manual->as_docbook; exit;
-$manual->save_as_pdf( 'catalyst_manual.pdf' );
+my $pdf_file = 'catalyst_manual.pdf';
+$manual->save_as_pdf( $pdf_file );
+
+print "pdf document '$pdf_file' created\n";
 
