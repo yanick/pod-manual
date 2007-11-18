@@ -12,3 +12,4 @@ t/90pod-coverage.t
 t/91perlcritic.t
 t/92pod.t
 examples/catalyst_manual.pl
+examples/rose-db-object.pl
