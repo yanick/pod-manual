@@ -22,6 +22,7 @@ my @dom_of           :Field;
 my @appendix_of      :Field;
 my @root_of          :Field;
 my @ignored_sections :Field;
+my @doc_title_of     :Field;
 
 sub _init :Init {
     my $self = shift;
@@ -40,8 +41,7 @@ sub _init :Init {
     $appendix_of[ $$self ] = undef;
 
     if ( my $title = $args_ref->{ title } ) {
-        my( $node ) = $dom_of[ $$self ]->findnodes( '/book/bookinfo/title' );
-        $node->appendText( $title );
+        $self->_set_doc_title( $title );
     }
 
     if ( my $x = $args_ref->{ignore_sections} ) {
@@ -49,6 +49,62 @@ sub _init :Init {
     }
 
 }
+
+sub _set_doc_title {
+    my( $self, $title ) = @_;
+
+    $doc_title_of[ $$self ] = $title;
+    my $title_node = $dom_of[ $$self ]->findnodes( '/book/bookinfo/title')
+                                      ->[0];
+    # remove any possible title already there
+    $title_node->removeChild( $_ ) for $title_node->childNodes;
+
+    $title_node->appendText( $title );
+
+    return;
+}
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+sub _find_module_pod {
+    my $self = shift;
+    my $module = shift;
+
+    my $file_location = pod_where( { -inc => 1 }, $module )
+        or die "couldn't find pod for module $module\n";
+
+    local $/ = undef;
+    open my $pod_fh, '<', $file_location 
+        or die "can't open pod file $file_location: $!";
+
+    return <$pod_fh>;
+}
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+sub _convert_pod_to_xml {
+    my $self = shift;
+    my $pod = shift;
+
+    my $parser = Pod::XML->new;
+
+    my $podxml;
+    local *STDOUT;
+    open STDOUT, '>', \$podxml;
+    open my $input_fh, '<', \$pod;
+    $parser->parse_from_filehandle( $input_fh );
+
+    $podxml =~ s/xmlns=".*?"//;
+    $podxml =~ s#]]></verbatim>\n<verbatim><!\[CDATA\[##g;
+
+    my $dom = eval { 
+        $parser_of[ $$self ]->parse_string( $podxml ) 
+    } or die "error while converting raw pod to xml for '$pod': $@";
+
+    return $dom;
+}
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 sub _get_podxml {
     my $self = shift;
@@ -81,16 +137,33 @@ sub add_chapters {
     $self->add_chapter( $_ => $options ) for @_;
 }
 
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 sub add_chapter {
     my $self = shift;
     my $chapter = shift;
 
     my $options = 'HASH' eq ref $_[-1] ? pop @_ : { };
 
+    my $podxml;
+   
+    # the chapter can be passed as various things
+    if ( $chapter =~ /\n/ ) {   # it's pure pod
+        $podxml = $self->_convert_pod_to_xml( $chapter );
+    }
+    elsif ( -f $chapter ) {     # it's a file
+        local $/ = undef;
+        open my $pod_fh, '<', $chapter 
+            or die "can't open pod file $chapter: $!";
+        $podxml = $self->_convert_pod_to_xml( <$pod_fh> );
+    }
+    else {                     # it's a module name
+        $podxml = $self->_convert_pod_to_xml( 
+                        $self->_find_module_pod( $chapter ) 
+        );
+    }
+                
     my $dom = $dom_of[ $$self ];
-
-    my $podxml = $self->_get_podxml( $chapter ) 
-        or croak "couldn't find pod for $chapter";
 
     my $docbook = XML::XPathScript->new->transform( $podxml, 
             $Pod::Manual::PodXML2Docbook::stylesheet );
@@ -102,6 +175,15 @@ sub add_chapter {
     if ( $@ ) {
         croak "chapter couldn't be converted to docbook: $@";
     }
+
+    # use the title of that section if the 'doc_title' option is
+    # used, or if there are no title given yet
+    if ( $options->{set_title} or not defined $doc_title_of[ $$self ] ) {
+        my $title = $subdoc->findvalue( '/chapter/title/text()' );
+        $title =~ s/\s*-.*//;  # remove desc after the '-'
+        $self->_set_doc_title( $title ) if $title;
+    }
+
 
     $dom->adoptNode( $subdoc );
 
@@ -288,13 +370,22 @@ in I<@section_names>.
 
 =back
 
-=head2 add_chapter( I<$module> )
+=head2 add_chapter( I<$module>, \%options )
 
-    $manual->add_chapter( 'Pod::Manual' );
+    $manual->add_chapter( 'Pod::Manual', { set_title => 1 } );
 
 Adds the pod of I<$module> to the manual.
 
-=head2 add_chapters( I<@modules> )
+=over
+
+=item set_title
+
+If true, sets the title of the chapter to be also the title
+of the manual.
+
+=back
+
+=head2 add_chapters( I<@modules>, \%options )
 
     $manual->add_chapters( 'Some::Module', 'Some::Other::Module' )
 
