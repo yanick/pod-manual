@@ -380,8 +380,8 @@ Adds the pod of I<$module> to the manual.
 
 =item set_title
 
-If true, sets the title of the chapter to be also the title
-of the manual.
+If true, uses the shortened title of the chapter as the title
+of the manual. 
 
 =back
 
