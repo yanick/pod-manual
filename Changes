@@ -3,6 +3,7 @@ Revision history for Pod-Manual
 0.08
     - The title of the manual now default to the shortened title
         of the first added chapter.
+    - Addition of a command-line utility: podmanual.
 
 0.07  17 Nov 2007
     - The CPAN indexer is not appreciating my switch to X.YY.ZZ notation.
