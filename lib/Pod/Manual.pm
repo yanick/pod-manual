@@ -327,8 +327,8 @@ Pod::Manual - Aggregates several PODs into a single manual
 
 This document describes Pod::Manual version 0.08
 
-As you can guess from the very low version number, this release
-is alpha quality. Use with caution.
+This module is still in early development and must be 
+considered as alpha quality. Use with caution.
 
 
 =head1 SYNOPSIS
