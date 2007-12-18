@@ -9,35 +9,44 @@ use Getopt::Long;
 my $title;
 my $output_file = 'manual';
 my $format      = 'pdf';
+my $silent      = 0;
 
 GetOptions(
-    'title=s'   => \$title,
-    'output=s'  => \$output_file,
-    'format=s'  => \$format,
+    'title=s'  => \$title,
+    'output=s' => \$output_file,
+    'format=s' => \$format,
+    'silent!'  => \$silent,
 );
 
-my $manual = Pod::Manual->new({ title => $title });
+my $manual = Pod::Manual->new( { title => $title } );
 
 # the chapters are either passed as arguments,
 # or taken from STDIN
 $manual->add_chapters( @ARGV ? @ARGV : split /\r?\n/, join '', <> );
 
 if ( $format eq 'pdf' ) {
-    $output_file =~ s/(\.pdf)?$/.pdf/;  # add .pdf, if missing
-    $manual->save_as_pdf( $output_file );
+    $output_file =~ s/(\.pdf)?$/.pdf/;    # add .pdf, if missing
+    $manual->save_as_pdf($output_file);
 }
 elsif ( $format eq 'docbook' ) {
-    $output_file .= '.docbook' unless $output_file =~ /\.\w+$/;
-    die "$output_file already exists\n" if -e $output_file;
-    open my $output_fh, '>', $output_file 
-            or die "can't write to $output_file: $!\n";
+    my $output_fh;
+    if ( $output_file eq 'stdout' ) {
+        open $output_fh, '>-'
+          or die "can't pipe to stdout: $!\n";
+    }
+    else {
+        $output_file .= '.docbook' unless $output_file =~ /\.\w+$/;
+        die "$output_file already exists\n" if -e $output_file;
+        open my $output_fh, '>', $output_file
+          or die "can't write to $output_file: $!\n";
+    }
     print {$output_fh} $manual->as_docbook;
-} 
+}
 else {
     die "format must be 'pdf' or 'docbook'\n";
 }
 
-print "document '$output_file' created\n";
+warn "document '$output_file' created\n" unless $silent;
 
 exit;
 
@@ -64,15 +73,32 @@ STDIN, assuming a format of one module name per line.
 
 =over
 
-=item -pdf I<filename>
+=item -format [ pdf | docbook ]  
 
-The manual is saved as the pdf file I<filename>.
+Output format. 'pdf' is the default.
+
+=item -output I<filename>
+
+Filename of the generated manual. Defaults to 'manual.pdf' or
+'manual.docbook', depending on the choosen format. 
+
+If the format is 'pdf', the suffix '.pdf' will be appended to 
+I<filename>, if not already present. 
+
+If the format is 'docbook', the suffix '.docbook' will be appended
+to I<filename> if no suffix is already present.  Also, the 
+special filename 'stdout' can be given to have the manual printed
+to STDOUT.
 
 =item -title I<manual title>
 
 Set the manual title.  If the option is not invoked, 
 the name of the first module will be used as the title of
 the manual.
+
+=item -silent
+
+Don't output any status message.
 
 =back
 
