@@ -5,18 +5,26 @@ use warnings;
 
 use Pod::Manual;
 use Getopt::Long;
+use Pod::Usage;
 
 my $title;
 my $output_file = 'manual';
 my $format      = 'pdf';
 my $silent      = 0;
+my $opt_help = 0;
+my $opt_man = 0;
 
 GetOptions(
     'title=s'  => \$title,
     'output=s' => \$output_file,
     'format=s' => \$format,
     'silent!'  => \$silent,
-);
+    'man'      => \$opt_man,
+    'help'     => \$opt_help,
+) or pod2usage(1);
+
+pod2usage(1) if $opt_help;
+pod2usage( -verbose => 2 ) if $opt_man;
 
 my $manual = Pod::Manual->new( { title => $title } );
 
@@ -99,6 +107,14 @@ the manual.
 =item -silent
 
 Don't output any status message.
+
+=item -man
+
+Output C<podmanual>'s manpage and exit.
+
+=item -help
+
+Output C<podmanual>'s usage and exit.
 
 =back
 
