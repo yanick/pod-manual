@@ -47,13 +47,27 @@ elsif ( $format eq 'docbook' ) {
     else {
         $output_file .= '.docbook' unless $output_file =~ /\.\w+$/;
         die "$output_file already exists\n" if -e $output_file;
-        open my $output_fh, '>', $output_file
+        open $output_fh, '>', $output_file
           or die "can't write to $output_file: $!\n";
     }
     print {$output_fh} $manual->as_docbook;
 }
+elsif ( lc( $format ) eq 'latex' ) {
+    my $output_fh;
+    if ( $output_file eq 'stdout' ) {
+        open $output_fh, '>-'
+          or die "can't pipe to stdout: $!\n";
+    }
+    else {
+        $output_file .= '.tex' unless $output_file =~ /\.\w+$/;
+        die "$output_file already exists\n" if -e $output_file;
+        open $output_fh, '>', $output_file
+          or die "can't write to $output_file: $!\n";
+    }
+    print {$output_fh} $manual->as_latex;
+}
 else {
-    die "format must be 'pdf' or 'docbook'\n";
+    die "format must be 'pdf', 'docbook' or 'LaTeX'\n";
 }
 
 warn "document '$output_file' created\n" unless $silent;
@@ -83,7 +97,7 @@ STDIN, assuming a format of one module name per line.
 
 =over
 
-=item -format [ pdf | docbook ]  
+=item -format [ pdf | docbook | latex ]  
 
 Output format. 'pdf' is the default.
 
@@ -95,8 +109,8 @@ Filename of the generated manual. Defaults to 'manual.pdf' or
 If the format is 'pdf', the suffix '.pdf' will be appended to 
 I<filename>, if not already present. 
 
-If the format is 'docbook', the suffix '.docbook' will be appended
-to I<filename> if no suffix is already present.  Also, the 
+If the format is 'docbook' or 'latex', the suffix '.docbook' or '.tex'
+will be appended to I<filename> if no suffix is already present.  Also, the 
 special filename 'stdout' can be given to have the manual printed
 to STDOUT.
 

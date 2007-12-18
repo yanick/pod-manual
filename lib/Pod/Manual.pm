@@ -162,7 +162,7 @@ sub add_chapter {
                         $self->_find_module_pod( $chapter ) 
         );
     }
-                
+
     my $dom = $dom_of[ $$self ];
 
     my $docbook = XML::XPathScript->new->transform( $podxml, 
@@ -391,7 +391,7 @@ of the manual.
 
 Adds the pod of several modules to the manual.
 
-=head2 as_docbook( I< { css => $filename } > )
+=head2 as_docbook( { css => $filename } )
 
     print $manual->as_docbook({ css => 'stylesheet.css' });
 
