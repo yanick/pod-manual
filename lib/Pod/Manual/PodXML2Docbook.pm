@@ -59,7 +59,10 @@ $template->set( title => {
 sub tc_title {
     my ( $n, $t ) = @_;
 
-    my( $abbrev ) = eval { split '-', $n->childNodes->[0]->toString, 2 };
+    my $abbrev;
+    if ( $n->parentNode->getName eq "sect1" ) {
+         ( $abbrev ) = eval { split '-', $n->childNodes->[0]->toString, 2 };
+    }
 
     $t->set({ post => "<titleabbrev>$abbrev</titleabbrev>" }) if $abbrev;
 

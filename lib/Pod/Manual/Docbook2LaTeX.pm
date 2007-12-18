@@ -20,6 +20,8 @@ our $stylesheet = <<'END_STYLESHEET';
         pre  => '<literal role="code">',
         post => '</literal>' 
     } );
+
+    $XML::XPathScript::Stylesheet::DocBook2LaTeX::uniconvs{ord('\\')} = '$\backslash$';
 %><%~ / %>
 END_STYLESHEET
 
