@@ -11,8 +11,8 @@ my $title;
 my $output_file = 'manual';
 my $format      = 'pdf';
 my $silent      = 0;
-my $opt_help = 0;
-my $opt_man = 0;
+my $opt_help    = 0;
+my $opt_man     = 0;
 
 GetOptions(
     'title=s'  => \$title,
