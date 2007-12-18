@@ -52,7 +52,7 @@ $template->set( emphasis => {
 
 $template->set( verbatim => { rename => 'screen' } );
 
-0 && $template->set( title => { 
+$template->set( title => { 
     showtag => 1,
     testcode => \&tc_title } );
 
