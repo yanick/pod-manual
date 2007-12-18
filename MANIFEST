@@ -14,3 +14,6 @@ t/92pod.t
 t/99signature.t
 examples/catalyst_manual.pl
 examples/rose-db-object.pl
+script/podmanual
+t/02title.t
+t/10podmanual.t

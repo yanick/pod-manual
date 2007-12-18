@@ -9,3 +9,5 @@ api
 api.1
 api_test.t
 blib
+manual.pdf
+manual.docbook
