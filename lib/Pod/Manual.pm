@@ -268,8 +268,9 @@ sub save_as_pdf {
     my @temp_files = grep { -e } map "$filename.$_" => qw/ aux log pdf tex toc /;
     if ( @temp_files ) {
         chdir $original_dir;
-        croak "temp files " . join( ' ', @temp_files )
-                            . " already exists, please remove";
+        my $plural = 's' x ( @temp_files > 1 );
+        die "temp file$plural " . join( ' ', @temp_files )
+                            . " in the way, please remove\n";
         return 0;
     }
 
@@ -283,8 +284,8 @@ sub save_as_pdf {
    close $latex_fh;
 
     for ( 1..2 ) {       # two times to populate the toc
-        system "pdflatex -interaction=batchmode $filename > /dev/null"
-            and croak "problem running pdflatex: $!";
+        system "pdflatex -interaction=batchmode $filename > /dev/null";
+           # and croak "problem running pdflatex: $!";
     }
 
    for my $ext ( qw/ aux log tex toc / ) {
@@ -321,7 +322,6 @@ __END__
 =head1 NAME
 
 Pod::Manual - Aggregates several PODs into a single manual
-
 
 =head1 VERSION
 

@@ -7,10 +7,14 @@ use Pod::Manual;
 use Getopt::Long;
 
 my $title;
-my $pdf_file;
+my $output_file = 'manual';
+my $format      = 'pdf';
 
-GetOptions( 'title=s' => \$title,
-            'pdf=s'   => \$pdf_file );
+GetOptions(
+    'title=s'   => \$title,
+    'output=s'  => \$output_file,
+    'format=s'  => \$format,
+);
 
 my $manual = Pod::Manual->new({ title => $title });
 
@@ -18,13 +22,24 @@ my $manual = Pod::Manual->new({ title => $title });
 # or taken from STDIN
 $manual->add_chapters( @ARGV ? @ARGV : split /\r?\n/, join '', <> );
 
-if ( $pdf_file ) {
-    $manual->save_as_pdf( $pdf_file );
-    print "pdf document '$pdf_file' created\n";
+if ( $format eq 'pdf' ) {
+    $output_file =~ s/(\.pdf)?$/.pdf/;  # add .pdf, if missing
+    $manual->save_as_pdf( $output_file );
 }
+elsif ( $format eq 'docbook' ) {
+    $output_file .= '.docbook' unless $output_file =~ /\.\w+$/;
+    die "$output_file already exists\n" if -e $output_file;
+    open my $output_fh, '>', $output_file 
+            or die "can't write to $output_file: $!\n";
+    print {$output_fh} $manual->as_docbook;
+} 
 else {
-    print $manual->as_docbook;
+    die "format must be 'pdf' or 'docbook'\n";
 }
+
+print "document '$output_file' created\n";
+
+exit;
 
 __END__
 
