@@ -7,7 +7,7 @@ use XML::XPathScript::Template;
 use XML::XPathScript::Processor;
 use XML::XPathScript::Stylesheet::DocBook2LaTeX;
 
-our $VERSION = '0.07';
+our $VERSION = '0.08';
 
 our $stylesheet = <<'END_STYLESHEET';
 <%

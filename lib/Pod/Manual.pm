@@ -15,7 +15,7 @@ use XML::XPathScript;
 use Pod::Manual::PodXML2Docbook;
 use Pod::Manual::Docbook2LaTeX;
 
-our $VERSION = '0.07';
+our $VERSION = '0.08';
 
 my @parser_of        :Field;
 my @dom_of           :Field;
@@ -325,7 +325,7 @@ Pod::Manual - Aggregates several PODs into a single manual
 
 =head1 VERSION
 
-This document describes Pod::Manual version 0.07
+This document describes Pod::Manual version 0.08
 
 As you can guess from the very low version number, this release
 is alpha quality. Use with caution.
