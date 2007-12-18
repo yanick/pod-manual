@@ -59,7 +59,8 @@ $template->set( title => {
 sub tc_title {
     my ( $n, $t ) = @_;
 
-    my( $abbrev ) = split '-', $n->childNodes->[0]->toString, 2;
+    my( $abbrev ) = eval { split '-', $n->childNodes->[0]->toString, 2 };
+
     $t->set({ post => "<titleabbrev>$abbrev</titleabbrev>" }) if $abbrev;
 
     return   $n->findvalue( 'text()' ) eq 'DESCRIPTION'
