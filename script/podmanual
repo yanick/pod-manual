@@ -7,6 +7,8 @@ use Pod::Manual;
 use Getopt::Long;
 use Pod::Usage;
 
+my $VERSION = '0.07';
+
 my $title;
 my $output_file = 'manual';
 my $format      = 'pdf';
@@ -117,6 +119,10 @@ Output C<podmanual>'s manpage and exit.
 Output C<podmanual>'s usage and exit.
 
 =back
+
+=head1 VERSION
+
+This document describes podmanual version 0.07
 
 =head1 SEE ALSO
 
