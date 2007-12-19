@@ -32,7 +32,7 @@ my $manual = Pod::Manual->new( { title => $title } );
 
 # the chapters are either passed as arguments,
 # or taken from STDIN
-$manual->add_chapters( @ARGV ? @ARGV : split /\r?\n/, join '', <> );
+$manual->add_chapters( @ARGV ? @ARGV : split /\r?\n/, join q{}, <> );
 
 if ( $format eq 'pdf' ) {
     $output_file =~ s/(\.pdf)?$/.pdf/;    # add .pdf, if missing
@@ -52,7 +52,7 @@ elsif ( $format eq 'docbook' ) {
     }
     print {$output_fh} $manual->as_docbook;
 }
-elsif ( lc( $format ) eq 'latex' ) {
+elsif ( lc($format) eq 'latex' ) {
     my $output_fh;
     if ( $output_file eq 'stdout' ) {
         open $output_fh, '>-'
