@@ -1,3 +1,4 @@
 - Check that all fields are there for podmanual POD
 - Check what's wrong for Pod::Manual manual
+- On first page, put footer: "generated with Pod::Manual v0.08"
 
