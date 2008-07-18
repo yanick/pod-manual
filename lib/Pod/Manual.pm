@@ -23,6 +23,11 @@ my @appendix_of      :Field;
 my @root_of          :Field;
 my @ignored_sections :Field;
 my @doc_title_of     :Field;
+my @unique_id        :Field;
+
+sub unique_id {
+    return ++$unique_id[ ${$_[0]} ];
+}
 
 sub _init :Init {
     my $self = shift;
@@ -173,6 +178,11 @@ sub add_chapter {
 
     if ( $@ ) {
         croak "chapter couldn't be converted to docbook: $@";
+    }
+
+    # give the chapter an id if there isn't
+    unless ( $subdoc->getAttribute( 'id' ) ) {
+        $subdoc->setAttribute( 'id' => 'chapter-'.$self->unique_id );
     }
 
     # fix the title
