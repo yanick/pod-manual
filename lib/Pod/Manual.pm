@@ -86,16 +86,14 @@ sub _convert_pod_to_xml {
     my $self = shift;
     my $pod = shift;
 
-    my $parser = Pod::XML->new;
+    use Pod::2::DocBook;
+    my $parser = Pod::2::DocBook->new ( doctype => 'chapter',);
 
     my $podxml;
     local *STDOUT;
     open STDOUT, '>', \$podxml;
     open my $input_fh, '<', \$pod;
     $parser->parse_from_filehandle( $input_fh );
-
-    $podxml =~ s/xmlns=".*?"//;
-    $podxml =~ s#]]></verbatim>\n<verbatim><!\[CDATA\[##g;
 
     my $dom = eval { 
         $parser_of[ $$self ]->parse_string( $podxml ) 
@@ -165,16 +163,26 @@ sub add_chapter {
 
     my $dom = $dom_of[ $$self ];
 
-    my $docbook = XML::XPathScript->new->transform( $podxml, 
-            $Pod::Manual::PodXML2Docbook::stylesheet );
+    my $subdoc = $podxml->documentElement;
+    #my $docbook = XML::XPathScript->new->transform( $podxml, 
+    #        $Pod::Manual::PodXML2Docbook::stylesheet );
 
-    my $subdoc = eval { 
-        XML::LibXML->new->parse_string( $docbook )->documentElement;
-    };
+    #my $subdoc = eval { 
+    #    XML::LibXML->new->parse_string( $docbook )->documentElement;
+    #};
 
     if ( $@ ) {
         croak "chapter couldn't be converted to docbook: $@";
     }
+
+    # fix the title
+    if ( my ( $node ) = $subdoc->findnodes( 'section[title/text()="NAME"]' ) ) {
+        my $title = $node->findvalue( 'para/text()' );
+        my ( $title_node ) = $subdoc->findnodes( 'title' );
+        $title_node->appendText( $title );
+        $node->unbindNode;
+    }
+    
 
     # use the title of that section if the 'doc_title' option is
     # used, or if there are no title given yet
