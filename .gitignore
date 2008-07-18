@@ -4,3 +4,4 @@ Makefile.PL
 _build
 blib
 *.swp
+*.tar.gz
