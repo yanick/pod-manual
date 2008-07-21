@@ -133,6 +133,8 @@ sub _get_podxml {
     return $dom;
 }
 
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 sub add_chapters { 
     my $self = shift;
     my $options = 'HASH' eq ref $_[-1] ?  %{ pop @_ } : { };
@@ -190,7 +192,32 @@ sub add_chapter {
         my $title = $node->findvalue( 'para/text()' );
         my ( $title_node ) = $subdoc->findnodes( 'title' );
         $title_node->appendText( $title );
+        if ( $title =~ /-/ ) {
+            my ( $short ) = split /\s*-\s*/, $title;
+
+            my $abbrev = $title_node->ownerDocument->createElement( 'titleabbrev' );
+            $abbrev->appendText( $short );
+
+            $title_node->appendChild( $abbrev );
+        }
         $node->unbindNode;
+    }
+
+    # give abbreviations to all section titles
+    for my $title ( $subdoc->findnodes( 'section/title' ) ) {
+        next if $title->findnodes( 'titleabbrev' );  #already there
+        my $abbrev = $title->ownerDocument->createElement( 'titleabbrev' );
+        my $text = $title->toString;
+        $title->appendChild( $abbrev );
+        # FIXME
+        $text =~ s/^<.*?>//;
+        $text =~ s#</.*?>$##;
+        if ( length( $text ) > 20 ) {
+            # heuristics... *cross fingers*
+            $text =~ s/\s+-.*$//;  # something - like this
+            $text =~ s/\(.*?\)/( ... )/;
+        }
+        $abbrev->appendText( $text );
     }
     
 
@@ -240,6 +267,9 @@ sub as_docbook {
     my $self = shift;
     my %option = ref $_[0] eq 'HASH' ? %{ $_[0] } : () ;
 
+    # generate the toc
+    $self->generate_toc;
+
     my $dom = $dom_of[ $$self ];
 
     if ( my $css = $option{ css } ) {
@@ -251,7 +281,56 @@ sub as_docbook {
         $dom->insertBefore( $pi, $dom->firstChild );
     }
 
+
     return $dom->toString;
+}
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+sub generate_toc {
+    my $self = shift;
+    my $dom = $dom_of[ $$self ];
+
+    # if there's already a toc, nuke it
+    for ( $dom->findnodes( 'toc' ) ) {
+        $_->unbindNode;
+    }
+
+    my $toc = $dom->createElement( 'toc' );
+    my ( $bookinfo ) = $dom->findnodes( '/book/bookinfo' );
+    $bookinfo->parentNode->insertAfter( $toc, $bookinfo );
+
+    for my $chapter ( $dom->findnodes( '/book/chapter' ) ) {
+        $self->add_entry_to_toc( 0, $toc, $chapter );
+    }
+}
+
+sub tag_content {
+    my $node;
+    my $text;
+    $text .= $_->toString for $node->childNodes;
+    return $text;
+}
+
+sub add_entry_to_toc {
+    my ( $self, $level, $toc, $chapter ) = @_;
+
+    my $tocchap = $chapter->ownerDocument->createElement( 
+        $level == 0 ? 'tocchap' : 'toclevel'.$level 
+    );
+    $toc->addChild( $tocchap );
+
+    my $title = $chapter->findvalue( 'title/titleabbrev/text()' ) 
+              || $chapter->findvalue( 'title/text()' );
+
+    my $tocentry = $chapter->ownerDocument->createElement( 'tocentry' );
+    $tocchap->addChild( $tocentry );
+    $tocentry->setAttribute( href => '#'.$chapter->getAttribute( 'id' ) );
+    $tocentry->appendText( $title );
+
+    for my $child ( $chapter->findnodes( 'section' ) ) {
+        $self->add_entry_to_toc( $level + 1, $tocchap, $child );
+    }
 }
 
 sub as_latex {
