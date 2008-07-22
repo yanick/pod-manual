@@ -14,6 +14,8 @@ use Pod::Find qw/ pod_where /;
 use XML::XPathScript;
 use Pod::Manual::PodXML2Docbook;
 use Pod::Manual::Docbook2LaTeX;
+use File::Temp qw/ tempfile tempdir /;
+    use File::Copy;
 
 our $VERSION = '0.08';
 
@@ -24,6 +26,32 @@ my @root_of          :Field;
 my @ignored_sections :Field;
 my @doc_title_of     :Field;
 my @unique_id        :Field;
+my @pdf_generator    :Field 
+                     :Arg(Name => 'pdf_generator', Default => 'latex')
+                     :Std(pdf_generator)
+                     ;
+my @prince_css       :Field
+                     :Arg('prince_css')
+                     :Set(set_prince_css)
+                     ;
+
+sub get_prince_css {
+    my $self = shift;
+
+    unless ( $prince_css[$$self] ) {
+
+        # try to find the stylesheet
+                                                    #<<< perltidy off
+        my ($css) = grep { -f $_ }
+                    map  { $_ . '/lib/prince/style/docbook.css' } 
+                         qw# /usr /usr/local #;
+                                                    #>>>
+
+        $self->set_prince_css($css) if $css;
+    }
+
+    return $prince_css[$$self];
+}
 
 sub unique_id {
     return ++$unique_id[ ${$_[0]} ];
@@ -347,20 +375,28 @@ sub as_latex {
     return $docbook;
 }
 
-sub save_as_pdf {
-    my $self = shift;
-    my $filename = shift 
-        or croak 'save_as_pdf: requires a filename as an argument';
 
-    $filename =~ s/\.pdf$// 
-        or croak "save_as_pdf: filename '$filename'"
-                ."must have suffix '.pdf'";
+sub generate_pdf_using_prince {
+    my ( $self, $filename ) = @_;
 
-    my $original_dir = cwd();    # let's remember where we are
+    # if no css, we must create our own
 
-    if ( $filename =~ s#^(.*)/## ) {
-        chdir $1 or croak "can't chdir to $1: $!";
-    }
+    my $docbook = $self->as_docbook({ css =>  
+            $self->local_prince_css( '.' ) });
+
+    open my $db_fh, '>', 'manual.docbook'
+        or croak "can't open file 'manual.docbook' for writing: $!";
+
+    print $db_fh $docbook;
+    close $db_fh;
+
+    system 'prince', 'manual.docbook', '-o', 'manual.pdf';
+
+    # TODO
+}
+
+sub generate_pdf_using_latex {
+    my ( $self, $filename, $original_dir ) = @_;
 
     my @temp_files = grep { -e } map "$filename.$_" => qw/ aux log pdf tex toc /;
     if ( @temp_files ) {
@@ -388,8 +424,40 @@ sub save_as_pdf {
    for my $ext ( qw/ aux log tex toc / ) {
        unlink "$filename.$ext" or croak "can't delete '$filename.$ext': $!";
    }
+}
+
+sub save_as_pdf {
+    # TODO: add -force argument
+    my $self = shift;
+    my $filename = shift 
+        or croak 'save_as_pdf: requires a filename as an argument';
+
+    $filename =~ s/\.pdf$// 
+        or croak "save_as_pdf: filename '$filename'"
+                ."must have suffix '.pdf'";
+
+    my $original_dir = cwd();    # let's remember where we are
+
+    my $tmpdir = tempdir( 'podmanualXXXX', CLEANUP => 1 );
+    warn "switching to directory $tmpdir\n";
+
+    chdir $tmpdir or die "can't switch to dir $tmpdir: $!\n";
+
+    if ( $filename =~ s#^(.*)/## ) {
+        chdir $1 or croak "can't chdir to $1: $!";
+    }
+
+    if ( $self->get_pdf_generator eq 'latex' ) {
+        $self->generate_pdf_using_latex( $filename, $original_dir );
+    }
+    elsif( $self->get_pdf_generator eq 'prince' ) {
+        $self->generate_pdf_using_prince( $filename, $original_dir );
+    }
+
 
     chdir $original_dir;
+
+    copy( $tmpdir.'/manual.pdf' => $filename ) or die $!;
 
     return 1;
 }
@@ -410,6 +478,93 @@ sub _add_to_appendix {
     $appendix_of[ $$self ]->appendChild( $_ ) for @nodes;
 
     return $self;
+}
+
+sub local_prince_css {
+    my $self = shift;
+    my $tempdir = shift;
+
+    my $css;
+
+    if ( my $prince = $self->get_prince_css ) {
+        $css = qq{\@import '$prince';\n};
+    }
+
+    $css .= <<'END_CSS';
+bookinfo title {
+    font-size: 24pt;
+    text-align: center;
+}
+
+tocentry { display: block;  }
+tocentry::after { content: leader(".") target-counter(attr(href), page); }
+toclevel1 { 
+    display: block;
+    position: inherit; 
+    padding-left: 20px; 
+}
+
+@page { 
+    @bottom-left {
+        content: string(doctitle)
+    }
+    @bottom-right { 
+        content: counter(page);
+        font-style: italic
+    }
+    @top-right {
+        content: string( current_section ) content();
+    }
+    @top-left {
+        content: string( current_chapter ) content();
+    }
+}
+
+bookinfo > title {
+    string-set: doctitle content();
+}
+
+/*
+title {
+   string-set: current_section content();
+}
+*/
+
+title > titleabbrev {
+    string-set: current_section content();
+}
+
+/* chapter title {
+    string-set: current_chapter content();
+} */
+
+chapter > title > titleabbrev {
+    string-set: current_chapter content();
+}
+
+@page:first { 
+    @top-left { content: normal }
+    @top-right { content: normal }
+    @bottom-left { content: normal }
+    @bottom-right { content: normal }
+}
+
+chapter > title::before {
+    display: none;
+}
+
+titleabbrev { display: none }
+
+emphasis[role="italic"] {
+    font-style: italic;
+}
+END_CSS
+
+    open my $css_fh, '>', 'docbook.css' 
+        or croak "can't open file docbook.css for writing: $!";
+    print $css_fh $css;
+
+    return 'docbook.css';
 }
 
 1; # Magic true value required at end of module
