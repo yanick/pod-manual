@@ -29,7 +29,7 @@ my @title            :Field
                      :Get(get_title);
 my @unique_id        :Field;
 my @pdf_generator    :Field 
-                     :Arg(Name => 'pdf_generator', Default => 'latex', Pre => sub { lc $_[4] } )
+                     :Arg(Name => 'pdf_generator', Default => 'latex', Pre => sub { lc $_[4] if $_[4]} )
                      :Std(Name => 'pdf_generator', Pre => sub { lc $_[4] } )
                      :Type(sub { grep { $_[0] eq $_ } qw/ prince latex / } )
                      ;
@@ -398,34 +398,20 @@ sub generate_pdf_using_prince {
 }
 
 sub generate_pdf_using_latex {
-    my ( $self, $filename, $original_dir ) = @_;
+    my ( $self ) = @_;
 
-    my @temp_files = grep { -e } map "$filename.$_" => qw/ aux log pdf tex toc /;
-    if ( @temp_files ) {
-        chdir $original_dir;
-        my $plural = 's' x ( @temp_files > 1 );
-        die "temp file$plural " . join( ' ', @temp_files )
-                            . " in the way, please remove\n";
-        return 0;
-    }
+   my $latex = $self->as_latex;
 
-    my $latex = $self->as_latex;
-
-   die $@ if $@;
-
-   open my $latex_fh, '>', $filename.'.tex' 
-       or croak "can't write to '$filename.tex': $!";
+   open my $latex_fh, '>', 'manual.tex' 
+       or croak "can't write to 'manual.text': $!";
    print {$latex_fh} $latex;
    close $latex_fh;
 
     for ( 1..2 ) {       # two times to populate the toc
-        system "pdflatex -interaction=batchmode $filename > /dev/null";
+        system "pdflatex -interaction=batchmode manual.tex > /dev/null";
            # and croak "problem running pdflatex: $!";
     }
 
-   for my $ext ( qw/ aux log tex toc / ) {
-       unlink "$filename.$ext" or croak "can't delete '$filename.$ext': $!";
-   }
 }
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
