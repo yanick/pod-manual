@@ -24,11 +24,14 @@ my @dom_of           :Field;
 my @appendix_of      :Field;
 my @root_of          :Field;
 my @ignored_sections :Field;
-my @doc_title_of     :Field;
+my @title            :Field
+                     :Arg(title)
+                     :Get(get_title);
 my @unique_id        :Field;
 my @pdf_generator    :Field 
-                     :Arg(Name => 'pdf_generator', Default => 'latex')
-                     :Std(pdf_generator)
+                     :Arg(Name => 'pdf_generator', Default => 'latex', Pre => sub { lc $_[4] } )
+                     :Std(Name => 'pdf_generator', Pre => sub { lc $_[4] } )
+                     :Type(sub { grep { $_[0] eq $_ } qw/ prince latex / } )
                      ;
 my @prince_css       :Field
                      :Arg('prince_css')
@@ -64,7 +67,9 @@ sub _init :Init {
     my $parser = $parser_of[ $$self ] = XML::LibXML->new;
 
     $dom_of[ $$self ] = $parser->parse_string(
-        '<book><bookinfo><title/></bookinfo></book>' 
+        '<book><bookinfo><title>' 
+            . $self->get_title 
+            . '</title></bookinfo></book>' 
     );
 
     $dom_of[ $$self ]->setEncoding( 'iso-8859-1' );
@@ -73,20 +78,19 @@ sub _init :Init {
 
     $appendix_of[ $$self ] = undef;
 
-    if ( my $title = $args_ref->{ title } ) {
-        $self->_set_doc_title( $title );
-    }
-
     if ( my $x = $args_ref->{ignore_sections} ) {
         push @{ $ignored_sections[ $$self ] }, ref $x ? @$x : $x ;
     }
 
 }
 
-sub _set_doc_title {
+sub set_title {
     my( $self, $title ) = @_;
 
-    $doc_title_of[ $$self ] = $title;
+    $title[ $$self ] = $title;
+
+    return unless $dom_of[ $$self ];
+
     my $title_node = $dom_of[ $$self ]->findnodes( '/book/bookinfo/title')
                                       ->[0];
     # remove any possible title already there
@@ -251,10 +255,10 @@ sub add_chapter {
 
     # use the title of that section if the 'doc_title' option is
     # used, or if there are no title given yet
-    if ( $options->{set_title} or not defined $doc_title_of[ $$self ] ) {
+    if ( $options->{set_title} or not defined $self->get_title ) {
         my $title = $subdoc->findvalue( '/chapter/title/text()' );
         $title =~ s/\s*-.*//;  # remove desc after the '-'
-        $self->_set_doc_title( $title ) if $title;
+        $self->set_title( $title ) if $title;
     }
 
 
@@ -391,8 +395,6 @@ sub generate_pdf_using_prince {
     close $db_fh;
 
     system 'prince', 'manual.docbook', '-o', 'manual.pdf';
-
-    # TODO
 }
 
 sub generate_pdf_using_latex {
@@ -426,6 +428,8 @@ sub generate_pdf_using_latex {
    }
 }
 
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 sub save_as_pdf {
     # TODO: add -force argument
     my $self = shift;
@@ -444,7 +448,6 @@ sub save_as_pdf {
     my $original_dir = cwd();    # let's remember where we are
 
     my $tmpdir = tempdir( 'podmanualXXXX', CLEANUP => 1 );
-    warn "switching to directory $tmpdir\n";
 
     chdir $tmpdir or die "can't switch to dir $tmpdir: $!\n";
 
@@ -592,11 +595,12 @@ considered as alpha quality. Use with caution.
 
     use Pod::Manual;
 
-    my $manual = Pod::Manual->new({ title => 'Pod::Manual' });
+    my $manual = Pod::Manual->new( title => 'My Manual' );
 
-    $manual->add_chapter( 'Pod::Manual' );
+    $manual->add_chapter( 'Some::Module' );
+    $manual->add_chapter( 'Some::Other::Module' );
 
-    my $docbook = $manual->as_docbook;
+    $manual->save_as_pdf( 'manual.pdf' );
 
 
 =head1 DESCRIPTION
@@ -624,6 +628,11 @@ Sets the title of the manual to I<$title>.
 
 When importing pods, discards any section having its title listed
 in I<@section_names>.
+
+=item pdf_generator => $generator
+
+Sets the pdf generation engine to be used.  Can be C<latex> 
+(the default) or C<prince>.
 
 =back
 
@@ -676,6 +685,15 @@ Returns 1 if the pdf has been created, 0 otherwise.
 B<NOTE>: this function requires to have 
 TeTeX installed and I<pdflatex> accessible
 via the I<$PATH>.
+
+=head2 set_pdf_generator( $generator )
+
+Sets the pdf generation engine to be used.  Can be C<latex> 
+(the default) or C<prince>.
+
+=head2 get_pdf_generator
+
+Returns the pdf generation engine used by the object.
 
 
 =head1 BUGS AND LIMITATIONS
