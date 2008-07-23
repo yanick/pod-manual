@@ -17,3 +17,4 @@ examples/rose-db-object.pl
 script/podmanual
 t/02title.t
 t/10podmanual.t
+t/pdf_generator.t
