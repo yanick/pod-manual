@@ -15,7 +15,7 @@ use XML::XPathScript;
 use Pod::Manual::PodXML2Docbook;
 use Pod::Manual::Docbook2LaTeX;
 use File::Temp qw/ tempfile tempdir /;
-    use File::Copy;
+use File::Copy;
 
 our $VERSION = '0.08';
 
@@ -429,12 +429,17 @@ sub generate_pdf_using_latex {
 sub save_as_pdf {
     # TODO: add -force argument
     my $self = shift;
+
     my $filename = shift 
         or croak 'save_as_pdf: requires a filename as an argument';
 
     $filename =~ s/\.pdf$// 
         or croak "save_as_pdf: filename '$filename'"
                 ."must have suffix '.pdf'";
+
+    if ( -f $filename.'.pdf' ) {
+        croak "file $filename.pdf already exist";
+    }
 
     my $original_dir = cwd();    # let's remember where we are
 
@@ -457,7 +462,7 @@ sub save_as_pdf {
 
     chdir $original_dir;
 
-    copy( $tmpdir.'/manual.pdf' => $filename ) or die $!;
+    copy( $tmpdir.'/manual.pdf' => $filename.'.pdf' ) or die $!;
 
     return 1;
 }
