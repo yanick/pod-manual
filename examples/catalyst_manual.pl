@@ -5,7 +5,7 @@ use warnings;
 
 use Pod::Manual;
 
-my $manual = Pod::Manual->new({ title => 'Catalyst' });
+my $manual = Pod::Manual->new( title => 'Catalyst' );
 
 $manual->add_chapters( qw/  Catalyst::Manual::About 
                             Catalyst::Manual::Actions

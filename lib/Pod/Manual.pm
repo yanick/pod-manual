@@ -14,6 +14,8 @@ use Pod::Find qw/ pod_where /;
 use XML::XPathScript;
 use Pod::Manual::PodXML2Docbook;
 use Pod::Manual::Docbook2LaTeX;
+use File::Temp qw/ tempfile tempdir /;
+use File::Copy;
 
 our $VERSION = '0.08';
 
@@ -22,7 +24,41 @@ my @dom_of           :Field;
 my @appendix_of      :Field;
 my @root_of          :Field;
 my @ignored_sections :Field;
-my @doc_title_of     :Field;
+my @title            :Field
+                     :Arg(title)
+                     :Get(get_title);
+my @unique_id        :Field;
+my @pdf_generator    :Field 
+                     :Arg(Name => 'pdf_generator', Default => 'latex', Pre => sub { lc $_[4] if $_[4]} )
+                     :Std(Name => 'pdf_generator', Pre => sub { lc $_[4] } )
+                     :Type(sub { grep { $_[0] eq $_ } qw/ prince latex / } )
+                     ;
+my @prince_css       :Field
+                     :Arg('prince_css')
+                     :Set(set_prince_css)
+                     ;
+
+sub get_prince_css {
+    my $self = shift;
+
+    unless ( $prince_css[$$self] ) {
+
+        # try to find the stylesheet
+                                                    #<<< perltidy off
+        my ($css) = grep { -f $_ }
+                    map  { $_ . '/lib/prince/style/docbook.css' } 
+                         qw# /usr /usr/local #;
+                                                    #>>>
+
+        $self->set_prince_css($css) if $css;
+    }
+
+    return $prince_css[$$self];
+}
+
+sub unique_id {
+    return ++$unique_id[ ${$_[0]} ];
+}
 
 sub _init :Init {
     my $self = shift;
@@ -31,7 +67,9 @@ sub _init :Init {
     my $parser = $parser_of[ $$self ] = XML::LibXML->new;
 
     $dom_of[ $$self ] = $parser->parse_string(
-        '<book><bookinfo><title/></bookinfo></book>' 
+        '<book><bookinfo><title>' 
+            . $self->get_title 
+            . '</title></bookinfo></book>' 
     );
 
     $dom_of[ $$self ]->setEncoding( 'iso-8859-1' );
@@ -40,20 +78,19 @@ sub _init :Init {
 
     $appendix_of[ $$self ] = undef;
 
-    if ( my $title = $args_ref->{ title } ) {
-        $self->_set_doc_title( $title );
-    }
-
     if ( my $x = $args_ref->{ignore_sections} ) {
         push @{ $ignored_sections[ $$self ] }, ref $x ? @$x : $x ;
     }
 
 }
 
-sub _set_doc_title {
+sub set_title {
     my( $self, $title ) = @_;
 
-    $doc_title_of[ $$self ] = $title;
+    $title[ $$self ] = $title;
+
+    return unless $dom_of[ $$self ];
+
     my $title_node = $dom_of[ $$self ]->findnodes( '/book/bookinfo/title')
                                       ->[0];
     # remove any possible title already there
@@ -86,16 +123,14 @@ sub _convert_pod_to_xml {
     my $self = shift;
     my $pod = shift;
 
-    my $parser = Pod::XML->new;
+    use Pod::2::DocBook;
+    my $parser = Pod::2::DocBook->new ( doctype => 'chapter',);
 
     my $podxml;
     local *STDOUT;
     open STDOUT, '>', \$podxml;
     open my $input_fh, '<', \$pod;
     $parser->parse_from_filehandle( $input_fh );
-
-    $podxml =~ s/xmlns=".*?"//;
-    $podxml =~ s#]]></verbatim>\n<verbatim><!\[CDATA\[##g;
 
     my $dom = eval { 
         $parser_of[ $$self ]->parse_string( $podxml ) 
@@ -129,6 +164,8 @@ sub _get_podxml {
 
     return $dom;
 }
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 sub add_chapters { 
     my $self = shift;
@@ -165,23 +202,63 @@ sub add_chapter {
 
     my $dom = $dom_of[ $$self ];
 
-    my $docbook = XML::XPathScript->new->transform( $podxml, 
-            $Pod::Manual::PodXML2Docbook::stylesheet );
+    my $subdoc = $podxml->documentElement;
+    #my $docbook = XML::XPathScript->new->transform( $podxml, 
+    #        $Pod::Manual::PodXML2Docbook::stylesheet );
 
-    my $subdoc = eval { 
-        XML::LibXML->new->parse_string( $docbook )->documentElement;
-    };
+    #my $subdoc = eval { 
+    #    XML::LibXML->new->parse_string( $docbook )->documentElement;
+    #};
 
     if ( $@ ) {
         croak "chapter couldn't be converted to docbook: $@";
     }
 
+    # give the chapter an id if there isn't
+    unless ( $subdoc->getAttribute( 'id' ) ) {
+        $subdoc->setAttribute( 'id' => 'chapter-'.$self->unique_id );
+    }
+
+    # fix the title
+    if ( my ( $node ) = $subdoc->findnodes( 'section[title/text()="NAME"]' ) ) {
+        my $title = $node->findvalue( 'para/text()' );
+        my ( $title_node ) = $subdoc->findnodes( 'title' );
+        $title_node->appendText( $title );
+        if ( $title =~ /-/ ) {
+            my ( $short ) = split /\s*-\s*/, $title;
+
+            my $abbrev = $title_node->ownerDocument->createElement( 'titleabbrev' );
+            $abbrev->appendText( $short );
+
+            $title_node->appendChild( $abbrev );
+        }
+        $node->unbindNode;
+    }
+
+    # give abbreviations to all section titles
+    for my $title ( $subdoc->findnodes( 'section/title' ) ) {
+        next if $title->findnodes( 'titleabbrev' );  #already there
+        my $abbrev = $title->ownerDocument->createElement( 'titleabbrev' );
+        my $text = $title->toString;
+        $title->appendChild( $abbrev );
+        # FIXME
+        $text =~ s/^<.*?>//;
+        $text =~ s#</.*?>$##;
+        if ( length( $text ) > 20 ) {
+            # heuristics... *cross fingers*
+            $text =~ s/\s+-.*$//;  # something - like this
+            $text =~ s/\(.*?\)/( ... )/;
+        }
+        $abbrev->appendText( $text );
+    }
+    
+
     # use the title of that section if the 'doc_title' option is
     # used, or if there are no title given yet
-    if ( $options->{set_title} or not defined $doc_title_of[ $$self ] ) {
+    if ( $options->{set_title} or not defined $self->get_title ) {
         my $title = $subdoc->findvalue( '/chapter/title/text()' );
         $title =~ s/\s*-.*//;  # remove desc after the '-'
-        $self->_set_doc_title( $title ) if $title;
+        $self->set_title( $title ) if $title;
     }
 
 
@@ -222,6 +299,9 @@ sub as_docbook {
     my $self = shift;
     my %option = ref $_[0] eq 'HASH' ? %{ $_[0] } : () ;
 
+    # generate the toc
+    $self->generate_toc;
+
     my $dom = $dom_of[ $$self ];
 
     if ( my $css = $option{ css } ) {
@@ -233,7 +313,56 @@ sub as_docbook {
         $dom->insertBefore( $pi, $dom->firstChild );
     }
 
+
     return $dom->toString;
+}
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+sub generate_toc {
+    my $self = shift;
+    my $dom = $dom_of[ $$self ];
+
+    # if there's already a toc, nuke it
+    for ( $dom->findnodes( 'toc' ) ) {
+        $_->unbindNode;
+    }
+
+    my $toc = $dom->createElement( 'toc' );
+    my ( $bookinfo ) = $dom->findnodes( '/book/bookinfo' );
+    $bookinfo->parentNode->insertAfter( $toc, $bookinfo );
+
+    for my $chapter ( $dom->findnodes( '/book/chapter' ) ) {
+        $self->add_entry_to_toc( 0, $toc, $chapter );
+    }
+}
+
+sub tag_content {
+    my $node;
+    my $text;
+    $text .= $_->toString for $node->childNodes;
+    return $text;
+}
+
+sub add_entry_to_toc {
+    my ( $self, $level, $toc, $chapter ) = @_;
+
+    my $tocchap = $chapter->ownerDocument->createElement( 
+        $level == 0 ? 'tocchap' : 'toclevel'.$level 
+    );
+    $toc->addChild( $tocchap );
+
+    my $title = $chapter->findvalue( 'title/titleabbrev/text()' ) 
+              || $chapter->findvalue( 'title/text()' );
+
+    my $tocentry = $chapter->ownerDocument->createElement( 'tocentry' );
+    $tocchap->addChild( $tocentry );
+    $tocentry->setAttribute( href => '#'.$chapter->getAttribute( 'id' ) );
+    $tocentry->appendText( $title );
+
+    for my $child ( $chapter->findnodes( 'section' ) ) {
+        $self->add_entry_to_toc( $level + 1, $tocchap, $child );
+    }
 }
 
 sub as_latex {
@@ -250,8 +379,47 @@ sub as_latex {
     return $docbook;
 }
 
+
+sub generate_pdf_using_prince {
+    my ( $self, $filename ) = @_;
+
+    # if no css, we must create our own
+
+    my $docbook = $self->as_docbook({ css =>  
+            $self->local_prince_css( '.' ) });
+
+    open my $db_fh, '>', 'manual.docbook'
+        or croak "can't open file 'manual.docbook' for writing: $!";
+
+    print $db_fh $docbook;
+    close $db_fh;
+
+    system 'prince', 'manual.docbook', '-o', 'manual.pdf';
+}
+
+sub generate_pdf_using_latex {
+    my ( $self ) = @_;
+
+   my $latex = $self->as_latex;
+
+   open my $latex_fh, '>', 'manual.tex' 
+       or croak "can't write to 'manual.text': $!";
+   print {$latex_fh} $latex;
+   close $latex_fh;
+
+    for ( 1..2 ) {       # two times to populate the toc
+        system "pdflatex -interaction=batchmode manual.tex > /dev/null";
+           # and croak "problem running pdflatex: $!";
+    }
+
+}
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 sub save_as_pdf {
+    # TODO: add -force argument
     my $self = shift;
+
     my $filename = shift 
         or croak 'save_as_pdf: requires a filename as an argument';
 
@@ -259,40 +427,31 @@ sub save_as_pdf {
         or croak "save_as_pdf: filename '$filename'"
                 ."must have suffix '.pdf'";
 
+    if ( -f $filename.'.pdf' ) {
+        croak "file $filename.pdf already exist";
+    }
+
     my $original_dir = cwd();    # let's remember where we are
+
+    my $tmpdir = tempdir( 'podmanualXXXX', CLEANUP => 1 );
+
+    chdir $tmpdir or die "can't switch to dir $tmpdir: $!\n";
 
     if ( $filename =~ s#^(.*)/## ) {
         chdir $1 or croak "can't chdir to $1: $!";
     }
 
-    my @temp_files = grep { -e } map "$filename.$_" => qw/ aux log pdf tex toc /;
-    if ( @temp_files ) {
-        chdir $original_dir;
-        my $plural = 's' x ( @temp_files > 1 );
-        die "temp file$plural " . join( ' ', @temp_files )
-                            . " in the way, please remove\n";
-        return 0;
+    if ( $self->get_pdf_generator eq 'latex' ) {
+        $self->generate_pdf_using_latex( $filename, $original_dir );
+    }
+    elsif( $self->get_pdf_generator eq 'prince' ) {
+        $self->generate_pdf_using_prince( $filename, $original_dir );
     }
 
-    my $latex = $self->as_latex;
-
-   die $@ if $@;
-
-   open my $latex_fh, '>', $filename.'.tex' 
-       or croak "can't write to '$filename.tex': $!";
-   print {$latex_fh} $latex;
-   close $latex_fh;
-
-    for ( 1..2 ) {       # two times to populate the toc
-        system "pdflatex -interaction=batchmode $filename > /dev/null";
-           # and croak "problem running pdflatex: $!";
-    }
-
-   for my $ext ( qw/ aux log tex toc / ) {
-       unlink "$filename.$ext" or croak "can't delete '$filename.$ext': $!";
-   }
 
     chdir $original_dir;
+
+    copy( $tmpdir.'/manual.pdf' => $filename.'.pdf' ) or die $!;
 
     return 1;
 }
@@ -315,6 +474,93 @@ sub _add_to_appendix {
     return $self;
 }
 
+sub local_prince_css {
+    my $self = shift;
+    my $tempdir = shift;
+
+    my $css;
+
+    if ( my $prince = $self->get_prince_css ) {
+        $css = qq{\@import '$prince';\n};
+    }
+
+    $css .= <<'END_CSS';
+bookinfo title {
+    font-size: 24pt;
+    text-align: center;
+}
+
+tocentry { display: block;  }
+tocentry::after { content: leader(".") target-counter(attr(href), page); }
+toclevel1 { 
+    display: block;
+    position: inherit; 
+    padding-left: 20px; 
+}
+
+@page { 
+    @bottom-left {
+        content: string(doctitle)
+    }
+    @bottom-right { 
+        content: counter(page);
+        font-style: italic
+    }
+    @top-right {
+        content: string( current_section ) content();
+    }
+    @top-left {
+        content: string( current_chapter ) content();
+    }
+}
+
+bookinfo > title {
+    string-set: doctitle content();
+}
+
+/*
+title {
+   string-set: current_section content();
+}
+*/
+
+title > titleabbrev {
+    string-set: current_section content();
+}
+
+/* chapter title {
+    string-set: current_chapter content();
+} */
+
+chapter > title > titleabbrev {
+    string-set: current_chapter content();
+}
+
+@page:first { 
+    @top-left { content: normal }
+    @top-right { content: normal }
+    @bottom-left { content: normal }
+    @bottom-right { content: normal }
+}
+
+chapter > title::before {
+    display: none;
+}
+
+titleabbrev { display: none }
+
+emphasis[role="italic"] {
+    font-style: italic;
+}
+END_CSS
+
+    open my $css_fh, '>', 'docbook.css' 
+        or croak "can't open file docbook.css for writing: $!";
+    print $css_fh $css;
+
+    return 'docbook.css';
+}
+
 1; # Magic true value required at end of module
 
 __END__
@@ -335,11 +581,12 @@ considered as alpha quality. Use with caution.
 
     use Pod::Manual;
 
-    my $manual = Pod::Manual->new({ title => 'Pod::Manual' });
+    my $manual = Pod::Manual->new( title => 'My Manual' );
 
-    $manual->add_chapter( 'Pod::Manual' );
+    $manual->add_chapter( 'Some::Module' );
+    $manual->add_chapter( 'Some::Other::Module' );
 
-    my $docbook = $manual->as_docbook;
+    $manual->save_as_pdf( 'manual.pdf' );
 
 
 =head1 DESCRIPTION
@@ -367,6 +614,11 @@ Sets the title of the manual to I<$title>.
 
 When importing pods, discards any section having its title listed
 in I<@section_names>.
+
+=item pdf_generator => $generator
+
+Sets the pdf generation engine to be used.  Can be C<latex> 
+(the default) or C<prince>.
 
 =back
 
@@ -419,6 +671,15 @@ Returns 1 if the pdf has been created, 0 otherwise.
 B<NOTE>: this function requires to have 
 TeTeX installed and I<pdflatex> accessible
 via the I<$PATH>.
+
+=head2 set_pdf_generator( $generator )
+
+Sets the pdf generation engine to be used.  Can be C<latex> 
+(the default) or C<prince>.
+
+=head2 get_pdf_generator
+
+Returns the pdf generation engine used by the object.
 
 
 =head1 BUGS AND LIMITATIONS
