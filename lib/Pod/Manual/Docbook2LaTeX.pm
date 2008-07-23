@@ -20,6 +20,11 @@ our $stylesheet = <<'END_STYLESHEET';
         pre  => '<literal role="code">',
         post => '</literal>' 
     } );
+    $template->set( 
+        [ qw/ titleabbrev toc / ] => { 
+            testcode => sub { $DO_NOT_PROCESS } 
+        },
+    );
 
     $XML::XPathScript::Stylesheet::DocBook2LaTeX::uniconvs{ord('\\')} = '$\backslash$';
 %><%~ / %>
