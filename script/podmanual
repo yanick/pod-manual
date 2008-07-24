@@ -15,20 +15,25 @@ my $format      = 'pdf';
 my $silent      = 0;
 my $opt_help    = 0;
 my $opt_man     = 0;
+my $pdf_gen     = 'latex';
 
 GetOptions(
-    'title=s'  => \$title,
-    'output=s' => \$output_file,
-    'format=s' => \$format,
-    'silent!'  => \$silent,
-    'man'      => \$opt_man,
-    'help'     => \$opt_help,
+    'title=s'        => \$title,
+    'output=s'       => \$output_file,
+    'format=s'       => \$format,
+    'silent!'        => \$silent,
+    'pdfgenerator=s' => \$pdf_gen,
+    'man'            => \$opt_man,
+    'help'           => \$opt_help,
 ) or pod2usage(1);
 
 pod2usage(1) if $opt_help;
 pod2usage( -verbose => 2 ) if $opt_man;
 
-my $manual = Pod::Manual->new( { title => $title } );
+my $manual = Pod::Manual->new(
+    title         => $title,
+    pdf_generator => $pdf_gen
+);
 
 # the chapters are either passed as arguments,
 # or taken from STDIN
@@ -100,6 +105,10 @@ STDIN, assuming a format of one module name per line.
 =item -format [ pdf | docbook | latex ]  
 
 Output format. 'pdf' is the default.
+
+=item -pdfgenerator [ latex | prince ]
+
+Specifies with pdf generator to use (defaults to 'latex').
 
 =item -output I<filename>
 
