@@ -11,9 +11,6 @@ use Cwd;
 use XML::LibXML;
 use Pod::XML;
 use Pod::Find qw/ pod_where /;
-use XML::XPathScript;
-use Pod::Manual::PodXML2Docbook;
-use Pod::Manual::Docbook2LaTeX;
 use File::Temp qw/ tempfile tempdir /;
 use File::Copy;
 
@@ -367,6 +364,14 @@ sub add_entry_to_toc {
 
 sub as_latex {
     my $self = shift;
+
+    eval {
+        require XML::XPathScript;
+        require Pod::Manual::Docbook2LaTeX;
+    };
+
+    croak 'as_latex() requires module XML::XPathScript to be installed'
+        if $@;
 
     my $xps = XML::XPathScript->new;
 
