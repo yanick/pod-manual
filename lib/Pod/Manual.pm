@@ -613,9 +613,12 @@ constructor:
 
 Sets the title of the manual to I<$title>.
 
-=item ignore_sections => \@section_names
+=item ignore_sections => $section_name
 
-When importing pods, discards any section having its title listed
+=item ignore_sections => \@sections_name
+
+When importing pods, discards any section having its title set as
+I<$section_name> or listed
 in I<@section_names>.
 
 =item pdf_generator => $generator
