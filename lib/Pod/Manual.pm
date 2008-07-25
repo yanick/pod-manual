@@ -10,9 +10,11 @@ use Carp;
 use Cwd;
 use XML::LibXML;
 use Pod::XML;
+use Pod::2::DocBook;
 use Pod::Find qw/ pod_where /;
 use File::Temp qw/ tempfile tempdir /;
 use File::Copy;
+use List::MoreUtils qw/ any /;
 
 our $VERSION = '0.08';
 
@@ -20,7 +22,10 @@ my @parser_of        :Field;
 my @dom_of           :Field;
 my @appendix_of      :Field;
 my @root_of          :Field;
-my @ignored_sections :Field;
+my @ignore_sections  :Field
+                     :Std(ignore_sections)
+                     :Arg(Name => 'ignore_sections', Type => 'array')
+                     ;
 my @title            :Field
                      :Arg(title)
                      :Get(get_title);
@@ -75,10 +80,6 @@ sub _init :Init {
 
     $appendix_of[ $$self ] = undef;
 
-    if ( my $x = $args_ref->{ignore_sections} ) {
-        push @{ $ignored_sections[ $$self ] }, ref $x ? @$x : $x ;
-    }
-
 }
 
 sub set_title {
@@ -120,7 +121,6 @@ sub _convert_pod_to_xml {
     my $self = shift;
     my $pod = shift;
 
-    use Pod::2::DocBook;
     my $parser = Pod::2::DocBook->new ( doctype => 'chapter',);
 
     my $podxml;
@@ -232,6 +232,14 @@ sub add_chapter {
         $node->unbindNode;
     }
 
+    # trash sections we don't want to see
+    for my $section ( $subdoc->findnodes( 'section' ) ) {
+        my $title = $section->findvalue( 'title/text()' );
+        if ( any { $_ eq $title } @{ $self->get_ignore_sections } ) {
+            $section->unbindNode;
+        }
+    }
+
     # give abbreviations to all section titles
     for my $title ( $subdoc->findnodes( 'section/title' ) ) {
         next if $title->findnodes( 'titleabbrev' );  #already there
@@ -271,16 +279,6 @@ sub add_chapter {
                 grep { $_->findvalue( 'title/text()' ) eq $section_title }
                      $subdoc->findnodes( 'section' )
             );
-        }
-    }
-
-    if ( $ignored_sections[ $$self ] ) {
-        my %to_ignore = map { $_ => 1 } @{ $ignored_sections[ $$self ] };
-        for my $section ( $subdoc->findnodes( 'section' ) ) {
-            my $title = $section->findvalue( 'title/text()' );
-            if ( $to_ignore{$title} ) {
-                $section->parentNode->removeChild( $section );
-            }
         }
     }
 
@@ -408,7 +406,7 @@ sub generate_pdf_using_latex {
    my $latex = $self->as_latex;
 
    open my $latex_fh, '>', 'manual.tex' 
-       or croak "can't write to 'manual.text': $!";
+       or croak "can't write to 'manual.tex': $!";
    print {$latex_fh} $latex;
    close $latex_fh;
 
@@ -442,9 +440,9 @@ sub save_as_pdf {
 
     chdir $tmpdir or die "can't switch to dir $tmpdir: $!\n";
 
-    if ( $filename =~ s#^(.*)/## ) {
-        chdir $1 or croak "can't chdir to $1: $!";
-    }
+    #if ( $filename =~ s#^(.*)/## ) {
+    #    chdir $1 or croak "can't chdir to $1: $!";
+    #}
 
     if ( $self->get_pdf_generator eq 'latex' ) {
         $self->generate_pdf_using_latex( $filename, $original_dir );
