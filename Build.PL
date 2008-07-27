@@ -12,9 +12,11 @@ my $builder = Module::Build->new(
         'Test::More'        => 0,
         'version'           => 0,
         'Object::InsideOut' => 0,
-        'XML::XPathScript'  => '1.54',
         'Pod::XML'          => 0,
         'Pod::Usage'        => 0,  # for podmanual
+    },
+    recommends => {
+        'XML::XPathScript'  => '1.54',
     },
     script_files        => [ 'script/podmanual' ],
     add_to_cleanup      => [ 'Pod-Manual-*' ],

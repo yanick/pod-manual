@@ -10,12 +10,11 @@ use Carp;
 use Cwd;
 use XML::LibXML;
 use Pod::XML;
+use Pod::2::DocBook;
 use Pod::Find qw/ pod_where /;
-use XML::XPathScript;
-use Pod::Manual::PodXML2Docbook;
-use Pod::Manual::Docbook2LaTeX;
 use File::Temp qw/ tempfile tempdir /;
 use File::Copy;
+use List::MoreUtils qw/ any /;
 
 our $VERSION = '0.08';
 
@@ -23,7 +22,10 @@ my @parser_of        :Field;
 my @dom_of           :Field;
 my @appendix_of      :Field;
 my @root_of          :Field;
-my @ignored_sections :Field;
+my @ignore_sections  :Field
+                     :Set(set_ignore_sections)
+                     :Arg(Name => 'ignore_sections', Type => 'array')
+                     ;
 my @title            :Field
                      :Arg(title)
                      :Get(get_title);
@@ -37,6 +39,14 @@ my @prince_css       :Field
                      :Arg('prince_css')
                      :Set(set_prince_css)
                      ;
+
+sub get_ignore_sections {
+    my $self = shift;
+
+    return unless $ignore_sections[ $$self ];
+
+    return @{ $ignore_sections[ $$self ] };
+}
 
 sub get_prince_css {
     my $self = shift;
@@ -77,10 +87,6 @@ sub _init :Init {
     $root_of[ $$self ] = $dom_of[ $$self ]->documentElement;
 
     $appendix_of[ $$self ] = undef;
-
-    if ( my $x = $args_ref->{ignore_sections} ) {
-        push @{ $ignored_sections[ $$self ] }, ref $x ? @$x : $x ;
-    }
 
 }
 
@@ -123,7 +129,6 @@ sub _convert_pod_to_xml {
     my $self = shift;
     my $pod = shift;
 
-    use Pod::2::DocBook;
     my $parser = Pod::2::DocBook->new ( doctype => 'chapter',);
 
     my $podxml;
@@ -235,6 +240,14 @@ sub add_chapter {
         $node->unbindNode;
     }
 
+    # trash sections we don't want to see
+    for my $section ( $subdoc->findnodes( 'section' ) ) {
+        my $title = $section->findvalue( 'title/text()' );
+        if ( any { $_ eq $title } $self->get_ignore_sections ) {
+            $section->unbindNode;
+        }
+    }
+
     # give abbreviations to all section titles
     for my $title ( $subdoc->findnodes( 'section/title' ) ) {
         next if $title->findnodes( 'titleabbrev' );  #already there
@@ -274,16 +287,6 @@ sub add_chapter {
                 grep { $_->findvalue( 'title/text()' ) eq $section_title }
                      $subdoc->findnodes( 'section' )
             );
-        }
-    }
-
-    if ( $ignored_sections[ $$self ] ) {
-        my %to_ignore = map { $_ => 1 } @{ $ignored_sections[ $$self ] };
-        for my $section ( $subdoc->findnodes( 'section' ) ) {
-            my $title = $section->findvalue( 'title/text()' );
-            if ( $to_ignore{$title} ) {
-                $section->parentNode->removeChild( $section );
-            }
         }
     }
 
@@ -378,6 +381,14 @@ sub add_entry_to_toc {
 sub as_latex {
     my $self = shift;
 
+    eval {
+        require XML::XPathScript;
+        require Pod::Manual::Docbook2LaTeX;
+    };
+
+    croak 'as_latex() requires module XML::XPathScript to be installed'
+        if $@;
+
     my $xps = XML::XPathScript->new;
 
     my $docbook = eval { $xps->transform( 
@@ -416,7 +427,7 @@ sub generate_pdf_using_latex {
    my $latex = $self->as_latex;
 
    open my $latex_fh, '>', 'manual.tex' 
-       or croak "can't write to 'manual.text': $!";
+       or croak "can't write to 'manual.tex': $!";
    print {$latex_fh} $latex;
    close $latex_fh;
 
@@ -450,9 +461,9 @@ sub save_as_pdf {
 
     chdir $tmpdir or die "can't switch to dir $tmpdir: $!\n";
 
-    if ( $filename =~ s#^(.*)/## ) {
-        chdir $1 or croak "can't chdir to $1: $!";
-    }
+    #if ( $filename =~ s#^(.*)/## ) {
+    #    chdir $1 or croak "can't chdir to $1: $!";
+    #}
 
     if ( $self->get_pdf_generator eq 'latex' ) {
         $self->generate_pdf_using_latex( $filename, $original_dir );
@@ -639,9 +650,12 @@ constructor:
 
 Sets the title of the manual to I<$title>.
 
-=item ignore_sections => \@section_names
+=item ignore_sections => $section_name
 
-When importing pods, discards any section having its title listed
+=item ignore_sections => \@sections_name
+
+When importing pods, discards any section having its title set as
+I<$section_name> or listed
 in I<@section_names>.
 
 =item pdf_generator => $generator
