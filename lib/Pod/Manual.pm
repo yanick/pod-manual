@@ -290,10 +290,14 @@ sub add_chapter {
     return $self;
 }
 
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 sub as_dom {
     my $self = shift;
     return $dom_of[ $$self ];
 }
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 sub as_docbook {
     my $self = shift;
@@ -337,12 +341,16 @@ sub generate_toc {
     }
 }
 
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 sub tag_content {
     my $node;
     my $text;
     $text .= $_->toString for $node->childNodes;
     return $text;
 }
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 sub add_entry_to_toc {
     my ( $self, $level, $toc, $chapter ) = @_;
@@ -365,6 +373,8 @@ sub add_entry_to_toc {
     }
 }
 
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 sub as_latex {
     my $self = shift;
 
@@ -379,6 +389,7 @@ sub as_latex {
     return $docbook;
 }
 
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 sub generate_pdf_using_prince {
     my ( $self, $filename ) = @_;
@@ -396,6 +407,8 @@ sub generate_pdf_using_prince {
 
     system 'prince', 'manual.docbook', '-o', 'manual.pdf';
 }
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 sub generate_pdf_using_latex {
     my ( $self ) = @_;
@@ -456,6 +469,8 @@ sub save_as_pdf {
     return 1;
 }
 
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 sub _add_to_appendix {
     my ( $self, @nodes ) = @_;
 
@@ -473,6 +488,8 @@ sub _add_to_appendix {
 
     return $self;
 }
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 sub local_prince_css {
     my $self = shift;
@@ -492,48 +509,43 @@ bookinfo title {
 
 tocentry { display: block;  }
 tocentry::after { content: leader(".") target-counter(attr(href), page); }
-toclevel1 { 
+
+toclevel1, toclevel2, toclevel3,
+toclevel4, toclevel5, toclevel6 { 
     display: block;
     position: inherit; 
     padding-left: 20px; 
-}
-
-@page { 
-    @bottom-left {
-        content: string(doctitle)
-    }
-    @bottom-right { 
-        content: counter(page);
-        font-style: italic
-    }
-    @top-right {
-        content: string( current_section ) content();
-    }
-    @top-left {
-        content: string( current_chapter ) content();
-    }
 }
 
 bookinfo > title {
     string-set: doctitle content();
 }
 
-/*
+
 title {
-   string-set: current_section content();
-}
-*/
-
-title > titleabbrev {
-    string-set: current_section content();
+    string-set: currentSection content();
 }
 
-/* chapter title {
-    string-set: current_chapter content();
-} */
+section > title {
+    margin-top: 5px;
+    font: 14pt;
+}
+
+chapter > section > title > titleabbrev { 
+    display: block; 
+    font: 10pt;
+    flow: static(currentSection);
+}
+
+chapter > title > titleabbrev { 
+    display: block; 
+    font: 10pt;
+    text-align: left;
+    flow: static(currentChapter);
+}
 
 chapter > title > titleabbrev {
-    string-set: current_chapter content();
+    string-set: currentChapter content();
 }
 
 @page:first { 
@@ -547,10 +559,27 @@ chapter > title::before {
     display: none;
 }
 
-titleabbrev { display: none }
+
 
 emphasis[role="italic"] {
     font-style: italic;
+}
+
+
+@page { 
+    @bottom-left {
+        content: string(doctitle)
+    }
+    @bottom-right { 
+        content: counter(page);
+        font-style: italic
+    }
+    @top-right {
+        content: flow(currentSection);
+    }
+    @top-left {
+        content: flow(currentChapter);
+    }
 }
 END_CSS
 
@@ -561,7 +590,7 @@ END_CSS
     return 'docbook.css';
 }
 
-1; # Magic true value required at end of module
+'end of Pod::Manual'; # Magic true value required at end of module
 
 __END__
 
