@@ -23,7 +23,7 @@ my @dom_of           :Field;
 my @appendix_of      :Field;
 my @root_of          :Field;
 my @ignore_sections  :Field
-                     :Std(ignore_sections)
+                     :Set(set_ignore_sections)
                      :Arg(Name => 'ignore_sections', Type => 'array')
                      ;
 my @title            :Field
@@ -39,6 +39,14 @@ my @prince_css       :Field
                      :Arg('prince_css')
                      :Set(set_prince_css)
                      ;
+
+sub get_ignore_sections {
+    my $self = shift;
+
+    return unless $ignore_sections[ $$self ];
+
+    return @{ $ignore_sections[ $$self ] };
+}
 
 sub get_prince_css {
     my $self = shift;
@@ -235,7 +243,7 @@ sub add_chapter {
     # trash sections we don't want to see
     for my $section ( $subdoc->findnodes( 'section' ) ) {
         my $title = $section->findvalue( 'title/text()' );
-        if ( any { $_ eq $title } @{ $self->get_ignore_sections } ) {
+        if ( any { $_ eq $title } $self->get_ignore_sections ) {
             $section->unbindNode;
         }
     }
