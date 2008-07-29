@@ -1,0 +1,8 @@
+Summary: Add Prince generator to podmanual
+Status: New
+CreatedBy: Yanick
+AssignedTo: 
+Inserted: 2008-07-23T21:41:41
+Updated: 2008-07-23T21:42:59
+
+podmanual -pdfgen=prince ...
