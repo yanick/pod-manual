@@ -41,6 +41,15 @@ sub ignore_sections_array :Tests(2) {
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+sub ignore_sections_add_chapter :Test {
+    my $manual = Pod::Manual->new;
+
+    $manual->add_chapter( sample_pod(), 
+        { ignore_sections => 'BUGS' } );
+
+    unlike $manual->as_docbook => qr/BUGS/;
+}
+
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 sub sample_pod {
