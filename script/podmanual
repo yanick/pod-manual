@@ -6,11 +6,14 @@ use warnings;
 use Pod::Manual;
 use Getopt::Long;
 use Pod::Usage;
+use List::MoreUtils qw/ none /;
 
 my $VERSION = '0.08';
 
+my @allowed_formats = qw/ latex docbook pdf /;
+
 my $title;
-my $output_file = 'manual';
+my $output;
 my $format      = 'pdf';
 my $silent      = 0;
 my $opt_help    = 0;
@@ -19,7 +22,7 @@ my $pdf_gen     = 'latex';
 
 GetOptions(
     'title=s'        => \$title,
-    'output=s'       => \$output_file,
+    'output=s'       => \$output,
     'format=s'       => \$format,
     'silent!'        => \$silent,
     'pdfgenerator=s' => \$pdf_gen,
@@ -30,6 +33,13 @@ GetOptions(
 pod2usage(1) if $opt_help;
 pod2usage( -verbose => 2 ) if $opt_man;
 
+$format = lc $format;
+
+if( none { $_ eq $format } @allowed_formats ) {
+    die "format $format not allowed\n",
+        "valid formats: ", join " ", @allowed_formats, "\n";
+}
+
 my $manual = Pod::Manual->new(
     title         => $title,
     pdf_generator => $pdf_gen
@@ -39,43 +49,33 @@ my $manual = Pod::Manual->new(
 # or taken from STDIN
 $manual->add_chapters( @ARGV ? @ARGV : split /\r?\n/, join q{}, <> );
 
-if ( $format eq 'pdf' ) {
-    $output_file =~ s/(\.pdf)?$/.pdf/;    # add .pdf, if missing
-    $manual->save_as_pdf($output_file);
-}
-elsif ( $format eq 'docbook' ) {
-    my $output_fh;
-    if ( $output_file eq 'stdout' ) {
-        open $output_fh, '>-'
-          or die "can't pipe to stdout: $!\n";
-    }
-    else {
-        $output_file .= '.docbook' unless $output_file =~ /\.\w+$/;
-        die "$output_file already exists\n" if -e $output_file;
-        open $output_fh, '>', $output_file
-          or die "can't write to $output_file: $!\n";
-    }
-    print {$output_fh} $manual->as_docbook;
-}
-elsif ( lc($format) eq 'latex' ) {
-    my $output_fh;
-    if ( $output_file eq 'stdout' ) {
-        open $output_fh, '>-'
-          or die "can't pipe to stdout: $!\n";
-    }
-    else {
-        $output_file .= '.tex' unless $output_file =~ /\.\w+$/;
-        die "$output_file already exists\n" if -e $output_file;
-        open $output_fh, '>', $output_file
-          or die "can't write to $output_file: $!\n";
-    }
-    print {$output_fh} $manual->as_latex;
+# figure out the output file
+$output ||= 'manual.'.$format;
+
+my $output_fh;
+
+if ( $output eq 'stdout' ) {
+    die "can't output pdf to stdout\n" if $format eq 'pdf';
+    open $output_fh, '>-' or die "can't pipe to stdout: $!\n";
 }
 else {
-    die "format must be 'pdf', 'docbook' or 'LaTeX'\n";
+    if ( $format eq 'pdf' ) {
+        $output_fh = $output;   # for the sake of the common interface
+    }
+    else {
+        open $output_fh, '>', $output or die "can't write to $output: $!\n";
+    }
 }
 
-warn "document '$output_file' created\n" unless $silent;
+my %generator = (
+    pdf     => sub { $_[0]->save_as_pdf( $_[1] ) },
+    latex   => sub { print {$_[1]} $_[0]->as_latex },
+    docbook => sub { print {$_[1]} $_[0]->as_docbook },
+);
+    
+$generator{$format}->( $manual, $output_fh );
+
+warn "document '$output' created\n" unless $silent;
 
 exit;
 
