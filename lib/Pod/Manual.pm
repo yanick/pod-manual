@@ -15,6 +15,7 @@ use Pod::Find qw/ pod_where /;
 use File::Temp qw/ tempfile tempdir /;
 use File::Copy;
 use List::MoreUtils qw/ any /;
+use Params::Validate;
 
 our $VERSION = '0.08';
 
@@ -23,9 +24,13 @@ my @dom_of           :Field;
 my @appendix_of      :Field;
 my @root_of          :Field;
 my @ignore_sections  :Field
-                     :Set(set_ignore_sections)
+                     :Set(set_ignore)
                      :Arg(Name => 'ignore_sections', Type => 'array')
                      ;
+my @appendix_sections :Field
+                      :Args(Name => 'appendix_sections', Type => 'array')
+                      :Set(set_appendix_sections)
+                      ;
 my @title            :Field
                      :Arg(title)
                      :Get(get_title);
@@ -39,6 +44,18 @@ my @prince_css       :Field
                      :Arg('prince_css')
                      :Set(set_prince_css)
                      ;
+
+
+### Special accessors ##########################################
+
+sub get_appendix_sections {
+    my $self = shift;
+    return $appendix_sections[ $$self ] ? @{ $appendix_sections[ $$self ] }
+                                       : ()
+                                       ;
+}
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 sub get_ignore_sections {
     my $self = shift;
@@ -174,18 +191,30 @@ sub _get_podxml {
 
 sub add_chapters { 
     my $self = shift;
-    my $options = 'HASH' eq ref $_[-1] ?  %{ pop @_ } : { };
+    my $options = 'HASH' eq ref $_[-1] ?   pop @_ : { };
 
     $self->add_chapter( $_ => $options ) for @_;
 }
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+
 sub add_chapter {
     my $self = shift;
     my $chapter = shift;
 
-    my $options = 'HASH' eq ref $_[-1] ? pop @_ : { };
+    my %option = validate( @_, {
+            ignore_sections   => { default => [ $self->get_ignore_sections ] },
+            appendix_sections => { default => [ $self->get_appendix_sections ] },
+            set_title => 0,
+        } );
+
+    # simplify things later
+    for my $i ( qw/ ignore_sections appendix_sections / ) {
+        unless ( ref $option{ $i } ) {
+            $option{$i} = [ $option{$i} ];
+        }
+    }
 
     my $podxml;
    
@@ -243,7 +272,7 @@ sub add_chapter {
     # trash sections we don't want to see
     for my $section ( $subdoc->findnodes( 'section' ) ) {
         my $title = $section->findvalue( 'title/text()' );
-        if ( any { $_ eq $title } $self->get_ignore_sections ) {
+        if ( any { $_ eq $title } @{ $option{ignore_sections} } ) {
             $section->unbindNode;
         }
     }
@@ -268,7 +297,7 @@ sub add_chapter {
 
     # use the title of that section if the 'doc_title' option is
     # used, or if there are no title given yet
-    if ( $options->{set_title} or not defined $self->get_title ) {
+    if ( $option{set_title} or not defined $self->get_title ) {
         my $title = $subdoc->findvalue( '/chapter/title/text()' );
         $title =~ s/\s*-.*//;  # remove desc after the '-'
         $self->set_title( $title ) if $title;
@@ -281,13 +310,11 @@ sub add_chapter {
     # at the end of the document
     $root_of[ $$self ]->insertBefore( $subdoc, $appendix_of[ $$self ] );
 
-    if ( my $list = $options->{move_to_appendix} ) {
-        for my $section_title ( ref $list ? @{ $list  } : $list ) {
-            $self->_add_to_appendix( 
-                grep { $_->findvalue( 'title/text()' ) eq $section_title }
-                     $subdoc->findnodes( 'section' )
-            );
-        }
+    for my $section_title ( @{ $option{appendix_sections} } ) {
+        $self->_add_to_appendix( 
+            grep { $_->findvalue( 'title/text()' ) eq $section_title }
+                    $subdoc->findnodes( 'section' )
+        );
     }
 
     return $self;
@@ -339,7 +366,8 @@ sub generate_toc {
     my ( $bookinfo ) = $dom->findnodes( '/book/bookinfo' );
     $bookinfo->parentNode->insertAfter( $toc, $bookinfo );
 
-    for my $chapter ( $dom->findnodes( '/book/chapter' ) ) {
+    for my $chapter ( $dom->findnodes( '/book/chapter' ),
+                      $dom->findnodes( '/book/appendix' ) ) {
         $self->add_entry_to_toc( 0, $toc, $chapter );
     }
 }
@@ -444,6 +472,13 @@ sub save_as_pdf {
     # TODO: add -force argument
     my $self = shift;
 
+    my %option;
+
+    if ( ref $_[-1] eq 'HASH' ) {
+        my @a = %{$_[-1]};
+        %option = validate( @a, { force => 0 } );
+    }
+
     my $filename = shift 
         or croak 'save_as_pdf: requires a filename as an argument';
 
@@ -452,7 +487,13 @@ sub save_as_pdf {
                 ."must have suffix '.pdf'";
 
     if ( -f $filename.'.pdf' ) {
-        croak "file $filename.pdf already exist";
+        if ( $option{force} ) {
+            unlink $filename.'.pdf' 
+                or die "can't remove file $filename.pdf: $!\n";
+        }
+        else {
+            croak "file $filename.pdf already exist";
+        }
     }
 
     my $original_dir = cwd();    # let's remember where we are
@@ -490,7 +531,7 @@ sub _add_to_appendix {
         $root_of[ $$self ]->appendChild( 
             $appendix_of[ $$self ] = $root_of[ $$self ]->new( 'appendix' )
         );
-        my $label = $appendix_of[ $$self ]->new( 'label' );
+        my $label = $appendix_of[ $$self ]->new( 'title' );
         $label->appendText( 'Appendix' );
         $appendix_of[ $$self ]->appendChild( $label );
     }
@@ -542,20 +583,24 @@ section > title {
     font: 14pt;
 }
 
-chapter > section > title > titleabbrev { 
+chapter > section > title > titleabbrev,
+appendix > section > title > titleabbrev
+{ 
     display: block; 
     font: 10pt;
     flow: static(currentSection);
 }
 
-chapter > title > titleabbrev { 
+chapter > title > titleabbrev,
+appendix > title > titleabbrev { 
     display: block; 
     font: 10pt;
     text-align: left;
     flow: static(currentChapter);
 }
 
-chapter > title > titleabbrev {
+chapter > title > titleabbrev,
+appendix > title > titleabbrev {
     string-set: currentChapter content();
 }
 
@@ -568,6 +613,11 @@ chapter > title > titleabbrev {
 
 chapter > title::before {
     display: none;
+}
+
+chapter > title,
+appendix > title {
+    text-align: left;
 }
 
 
@@ -591,6 +641,16 @@ emphasis[role="italic"] {
     @top-left {
         content: flow(currentChapter);
     }
+}
+
+appendix {
+    page-break-before: always;
+    display: block;
+}
+
+appendix > title {
+    font-size: 24pt;
+    font-weight: bold;
 }
 END_CSS
 
