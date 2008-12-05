@@ -253,6 +253,11 @@ sub add_chapter {
         $subdoc->setAttribute( 'id' => 'chapter-'.$self->unique_id );
     }
 
+    # fudge the id of the sections as well
+    for my $s ( $subdoc->findnodes( '//section' ) ) {
+        $s->setAttribute( id => 'section-'.$self->unique_id );
+    }
+
     # fix the title
     if ( my ( $node ) = $subdoc->findnodes( 'section[title/text()="NAME"]' ) ) {
         my $title = $node->findvalue( 'para/text()' );
@@ -523,20 +528,37 @@ sub save_as_pdf {
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+sub create_appendix {
+    my $self = shift;
+
+    return $appendix_of[ $$self ] if $appendix_of[ $$self ];
+
+    my $appendix = $root_of[ $$self ]->new( 'appendix' );
+    $appendix->setAttribute(  id => 'appendix-'.$self->unique_id );
+    
+    $root_of[ $$self ]->appendChild( $appendix );
+
+    my $label = $appendix->new( 'title' );
+    $label->appendText( 'Appendix' );
+    $appendix->appendChild( $label );
+}
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+sub get_appendix {
+    my ( $self, $create_if_missing ) = @_;
+
+    return $create_if_missing ? $self->create_appendix : $appendix_of[ $$self ];
+}
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 sub _add_to_appendix {
     my ( $self, @nodes ) = @_;
 
-    unless ( $appendix_of[ $$self ] ) {
-        # create appendix
-        $root_of[ $$self ]->appendChild( 
-            $appendix_of[ $$self ] = $root_of[ $$self ]->new( 'appendix' )
-        );
-        my $label = $appendix_of[ $$self ]->new( 'title' );
-        $label->appendText( 'Appendix' );
-        $appendix_of[ $$self ]->appendChild( $label );
-    }
+    my $appendix = $self->get_appendix(1);
 
-    $appendix_of[ $$self ]->appendChild( $_ ) for @nodes;
+    $appendix->appendChild( $_ ) for @nodes;
 
     return $self;
 }
