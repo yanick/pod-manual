@@ -20,3 +20,4 @@ issues
 perversionrc
 .*.tar.gz
 my-style.css
+^Pod-Manual-.*.tar$
