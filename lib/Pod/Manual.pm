@@ -17,7 +17,7 @@ use File::Copy;
 use List::MoreUtils qw/ any /;
 use Params::Validate;
 
-our $VERSION = '0.08';
+our $VERSION = '0.08_01';
 
 my @parser_of        :Field;
 my @dom_of           :Field;

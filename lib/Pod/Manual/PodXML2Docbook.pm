@@ -6,7 +6,7 @@ use warnings;
 use XML::XPathScript::Template;
 use XML::XPathScript::Processor;
 
-our $VERSION = '0.08';
+our $VERSION = '0.08_01';
 
 our $processor;
 
