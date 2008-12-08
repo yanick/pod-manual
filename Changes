@@ -1,6 +1,7 @@
 Revision history for Pod-Manual
 
 work
+    - Moved git repository to Github
     - Adding pdf generator Prince
 
 0.08 18 Dec 2007

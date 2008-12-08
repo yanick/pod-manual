@@ -22,6 +22,13 @@ my $builder = Module::Build->new(
     add_to_cleanup      => [ 'Pod-Manual-*' ],
     create_makefile_pl  => 'passthrough',
     sign                => 1,
+    meta_merge => {
+        resources => {
+            repository => 'git://github.com/yanick/pod-manual.git',
+            bugtracker =>
+            'http://rt.cpan.org/NoAuth/Bugs.html?Dist=Pod-Manual',
+        },
+    },
 );
 
 $builder->create_build_script();
