@@ -1,6 +1,9 @@
 Revision history for Pod-Manual
 
-0.08_01
+wip
+    - Added Pod::2::DocBook as depedencie
+
+0.08_01 7 Dec 2008
     - Added Prince PDF generator
     - Moved author tests to xt
     - Moved git repository to Github

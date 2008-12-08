@@ -14,6 +14,7 @@ my $builder = Module::Build->new(
         'Object::InsideOut' => 0,
         'Pod::XML'          => 0,
         'Pod::Usage'        => 0,  # for podmanual
+        'Pod::2::DocBook'   => '0.02',
     },
     recommends => {
         'XML::XPathScript'  => '1.54',
