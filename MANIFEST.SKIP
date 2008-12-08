@@ -12,3 +12,4 @@ blib
 manual.pdf
 manual.docbook
 TODO
+Makefile

@@ -6,3 +6,4 @@ blib
 *.swp
 *.tar.gz
 *.swo
+Makefile
