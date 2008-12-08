@@ -13,3 +13,10 @@ manual.pdf
 manual.docbook
 TODO
 Makefile
+.cil
+distrelease.yml
+distversionrc
+issues
+perversionrc
+.*.tar.gz
+my-style.css
