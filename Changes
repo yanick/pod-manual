@@ -1,7 +1,7 @@
 Revision history for Pod-Manual
 
-wip
-    - Added Pod::2::DocBook as depedencie
+0.08_02 10 Dec 2008
+    - Added Pod::2::DocBook as dependency
 
 0.08_01 7 Dec 2008
     - Added Prince PDF generator
