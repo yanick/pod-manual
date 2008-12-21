@@ -1,4 +1,13 @@
 use strict;
 use warnings;
 
-use Test::Class::Load 't/lib';
+BEGIN {
+    eval q{ 
+        use Test::Class::Load 't/lib';  
+        exit;
+    };
+}
+
+eval q{ use Test::More skip_all => 'Test::Class::Load required to run test' };
+
+

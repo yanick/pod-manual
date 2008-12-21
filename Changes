@@ -1,5 +1,9 @@
 Revision history for Pod-Manual
 
+wip
+    - Only run test-class.t if Test::Class is installed
+    - Added Params::Validate as a dependency
+
 0.08_02 10 Dec 2008
     - Added Pod::2::DocBook as dependency
 
