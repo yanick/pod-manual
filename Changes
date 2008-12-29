@@ -1,5 +1,8 @@
 Revision history for Pod-Manual
 
+0.08_04 29 Dec 2008
+    - Fix some dependencies in tests
+
 0.08_03 21 Dec 2008
     - Only run test-class.t if Test::Class is installed
     - Added Params::Validate as a dependency
