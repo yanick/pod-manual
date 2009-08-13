@@ -1,6 +1,9 @@
 package Pod::Manual;
 
-use Object::InsideOut;
+use MooseX::SemiAffordanceAccessor;
+use Moose;
+use MooseX::Method::Signatures;
+use MooseX::AttributeHelpers;
 
 use warnings;
 no warnings qw/ uninitialized /;
@@ -19,10 +22,44 @@ use Params::Validate;
 
 our $VERSION = '0.08_04';
 
-my @parser_of        :Field;
-my @dom_of           :Field;
-my @appendix_of      :Field;
-my @root_of          :Field;
+has parser => ( is => 'ro', default => sub { XML::LibXML->new } );
+has dom => ( is => 'ro', 
+    default => sub {
+       my $self = shift; 
+        my $dom = $self->parser->parse_string(
+        '<book><bookinfo><title>' 
+            . $self->get_title 
+            . '</title></bookinfo></book>' 
+    );
+
+        $dom->setEncoding( 'iso-8859-1' );
+    });
+has appendix => ( is => 'rw' );
+has root => ( is => 'ro',
+    default => sub {
+        my $self = shift;
+        $self->dom->documentElement;
+    });
+has title => ( is => 'rw' );
+has unique_id => ( 
+    is => 'ro',
+    metaclass => 'Counter',
+    isa => 'Num',
+    default => 0,
+    trigger => {
+        inc => 'unique_id',
+    },
+    );
+has prince_css => ( is => 'rw',
+    default => sub {
+        my $self = shift;
+        my ($css) = grep { -f $_ }
+                    map  { $_ . '/lib/prince/style/docbook.css' } 
+                         qw# /usr /usr/local #;
+        return $css;
+    },
+);
+
 my @ignore_sections  :Field
                      :Set(set_ignore)
                      :Arg(Name => 'ignore_sections', Type => 'array')
@@ -31,18 +68,12 @@ my @appendix_sections :Field
                       :Args(Name => 'appendix_sections', Type => 'array')
                       :Set(set_appendix_sections)
                       ;
-my @title            :Field
-                     :Arg(title)
-                     :Get(get_title);
-my @unique_id        :Field;
+
+                      
 my @pdf_generator    :Field 
                      :Arg(Name => 'pdf_generator', Default => 'latex', Pre => sub { lc $_[4] if $_[4]} )
                      :Std(Name => 'pdf_generator', Pre => sub { lc $_[4] } )
                      :Type(sub { grep { $_[0] eq $_ } qw/ prince latex / } )
-                     ;
-my @prince_css       :Field
-                     :Arg('prince_css')
-                     :Set(set_prince_css)
                      ;
 
 
@@ -65,24 +96,6 @@ sub get_ignore_sections {
     return @{ $ignore_sections[ $$self ] };
 }
 
-sub get_prince_css {
-    my $self = shift;
-
-    unless ( $prince_css[$$self] ) {
-
-        # try to find the stylesheet
-                                                    #<<< perltidy off
-        my ($css) = grep { -f $_ }
-                    map  { $_ . '/lib/prince/style/docbook.css' } 
-                         qw# /usr /usr/local #;
-                                                    #>>>
-
-        $self->set_prince_css($css) if $css;
-    }
-
-    return $prince_css[$$self];
-}
-
 sub unique_id {
     return ++$unique_id[ ${$_[0]} ];
 }
@@ -90,20 +103,6 @@ sub unique_id {
 sub _init :Init {
     my $self = shift;
     my $args_ref = shift;
-
-    my $parser = $parser_of[ $$self ] = XML::LibXML->new;
-
-    $dom_of[ $$self ] = $parser->parse_string(
-        '<book><bookinfo><title>' 
-            . $self->get_title 
-            . '</title></bookinfo></book>' 
-    );
-
-    $dom_of[ $$self ]->setEncoding( 'iso-8859-1' );
-
-    $root_of[ $$self ] = $dom_of[ $$self ]->documentElement;
-
-    $appendix_of[ $$self ] = undef;
 
 }
 
