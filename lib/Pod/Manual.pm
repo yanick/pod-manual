@@ -24,30 +24,47 @@ our $VERSION = '0.08_04';
 
 has parser => ( is => 'ro', default => sub { XML::LibXML->new } );
 has dom => ( is => 'ro', 
+    lazy => 1,
     default => sub {
        my $self = shift; 
         my $dom = $self->parser->parse_string(
         '<book><bookinfo><title>' 
-            . $self->get_title 
+            . $self->title 
             . '</title></bookinfo></book>' 
     );
 
         $dom->setEncoding( 'iso-8859-1' );
+        $dom;
     });
 has appendix => ( is => 'rw' );
 has root => ( is => 'ro',
+    lazy => 1,
     default => sub {
         my $self = shift;
         $self->dom->documentElement;
     });
-has title => ( is => 'rw' );
+has title => ( 
+    is => 'rw' ,
+    isa => 'Str',
+    trigger => sub {
+        my( $self, $title ) = @_;
+
+    my $title_node = $self->dom->findnodes( '/book/bookinfo/title')
+                                      ->[0];
+    # remove any possible title already there
+    $title_node->removeChild( $_ ) for $title_node->childNodes;
+
+    $title_node->appendText( $title );
+    },
+);
 has unique_id => ( 
     is => 'ro',
     metaclass => 'Counter',
     isa => 'Num',
     default => 0,
-    trigger => {
-        inc => 'unique_id',
+    trigger => sub {
+        my $self = shift;
+        $self->unique_id->inc;
     },
     );
 has prince_css => ( is => 'rw',
@@ -60,68 +77,33 @@ has prince_css => ( is => 'rw',
     },
 );
 
-my @ignore_sections  :Field
-                     :Set(set_ignore)
-                     :Arg(Name => 'ignore_sections', Type => 'array')
-                     ;
-my @appendix_sections :Field
-                      :Args(Name => 'appendix_sections', Type => 'array')
-                      :Set(set_appendix_sections)
-                      ;
+has ignore_sections => (
+    metaclass => 'Collection::Array',
+    isa => 'ArrayRef[Str]',
+    default => sub { [] },
+    provides => {
+        elements => 'ignore_sections',
+    },
+);
+
+#has appendix_sections => (
+#    metaclass => 'Collection::Array',
+#    is => 'rw',
+#    isa => 'ArrayRef[Str]',
+#    default => {[]},
+#    provides => {
+#        elements => 'appendix_sections',
+#        },
+#);
+
+has pdf_generator => (
+    is => 'rw',
+    isa => 'Str',
+    default => 'latex',
+);
 
                       
-my @pdf_generator    :Field 
-                     :Arg(Name => 'pdf_generator', Default => 'latex', Pre => sub { lc $_[4] if $_[4]} )
-                     :Std(Name => 'pdf_generator', Pre => sub { lc $_[4] } )
-                     :Type(sub { grep { $_[0] eq $_ } qw/ prince latex / } )
-                     ;
-
-
 ### Special accessors ##########################################
-
-sub get_appendix_sections {
-    my $self = shift;
-    return $appendix_sections[ $$self ] ? @{ $appendix_sections[ $$self ] }
-                                       : ()
-                                       ;
-}
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-sub get_ignore_sections {
-    my $self = shift;
-
-    return unless $ignore_sections[ $$self ];
-
-    return @{ $ignore_sections[ $$self ] };
-}
-
-sub unique_id {
-    return ++$unique_id[ ${$_[0]} ];
-}
-
-sub _init :Init {
-    my $self = shift;
-    my $args_ref = shift;
-
-}
-
-sub set_title {
-    my( $self, $title ) = @_;
-
-    $title[ $$self ] = $title;
-
-    return unless $dom_of[ $$self ];
-
-    my $title_node = $dom_of[ $$self ]->findnodes( '/book/bookinfo/title')
-                                      ->[0];
-    # remove any possible title already there
-    $title_node->removeChild( $_ ) for $title_node->childNodes;
-
-    $title_node->appendText( $title );
-
-    return;
-}
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -154,7 +136,7 @@ sub _convert_pod_to_xml {
     $parser->parse_from_filehandle( $input_fh );
 
     my $dom = eval { 
-        $parser_of[ $$self ]->parse_string( $podxml ) 
+        $self->parser->parse_string( $podxml ) 
     } or die "error while converting raw pod to xml for '$pod': $@";
 
     return $dom;
@@ -180,7 +162,7 @@ sub _get_podxml {
     $podxml =~ s#]]></verbatim>\n<verbatim><!\[CDATA\[##g;
 
     my $dom = eval { 
-        $parser_of[ $$self ]->parse_string( $podxml ) 
+        $self->parser->parse_string( $podxml ) 
     } or die "error while converting raw pod to xml for '$pod': $@";
 
     return $dom;
@@ -203,8 +185,8 @@ sub add_chapter {
     my $chapter = shift;
 
     my %option = validate( @_, {
-            ignore_sections   => { default => [ $self->get_ignore_sections ] },
-            appendix_sections => { default => [ $self->get_appendix_sections ] },
+            ignore_sections   => { default => [ $self->ignore_sections ] },
+#            appendix_sections => { default => [ $self->get_appendix_sections ] },
             set_title => 0,
         } );
 
@@ -233,7 +215,7 @@ sub add_chapter {
         );
     }
 
-    my $dom = $dom_of[ $$self ];
+    my $dom = $self->dom;
 
     my $subdoc = $podxml->documentElement;
     #my $docbook = XML::XPathScript->new->transform( $podxml, 
@@ -301,7 +283,7 @@ sub add_chapter {
 
     # use the title of that section if the 'doc_title' option is
     # used, or if there are no title given yet
-    if ( $option{set_title} or not defined $self->get_title ) {
+    if ( $option{set_title} or not defined $self->title ) {
         my $title = $subdoc->findvalue( '/chapter/title/text()' );
         $title =~ s/\s*-.*//;  # remove desc after the '-'
         $self->set_title( $title ) if $title;
@@ -312,14 +294,14 @@ sub add_chapter {
 
     # if there is no appendix, it adds the chapter
     # at the end of the document
-    $root_of[ $$self ]->insertBefore( $subdoc, $appendix_of[ $$self ] );
+    $self->root->insertBefore( $subdoc, undef );
 
-    for my $section_title ( @{ $option{appendix_sections} } ) {
-        $self->_add_to_appendix( 
-            grep { $_->findvalue( 'title/text()' ) eq $section_title }
-                    $subdoc->findnodes( 'section' )
-        );
-    }
+    #   for my $section_title ( @{ $option{appendix_sections} } ) {
+    #    $self->_add_to_appendix( 
+    #        grep { $_->findvalue( 'title/text()' ) eq $section_title }
+    #                $subdoc->findnodes( 'section' )
+    #    );
+    #}
 
     return $self;
 }
@@ -328,7 +310,7 @@ sub add_chapter {
 
 sub as_dom {
     my $self = shift;
-    return $dom_of[ $$self ];
+    return $self->dom;
 }
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -340,11 +322,11 @@ sub as_docbook {
     # generate the toc
     $self->generate_toc;
 
-    my $dom = $dom_of[ $$self ];
+    my $dom = $self->dom;
 
     if ( my $css = $option{ css } ) {
         # make a copy of the dom so that we're not stuck with the PI
-        $dom = $parser_of[ $$self ]->parse_string( $dom->toString );
+        $dom = $self->parser->parse_string( $dom->toString );
 
         my $pi = $dom->createPI( 'xml-stylesheet' 
                                     => qq{href="$css" type="text/css"} );
@@ -359,7 +341,7 @@ sub as_docbook {
 
 sub generate_toc {
     my $self = shift;
-    my $dom = $dom_of[ $$self ];
+    my $dom = $self->dom;
 
     # if there's already a toc, nuke it
     for ( $dom->findnodes( 'toc' ) ) {
@@ -510,7 +492,7 @@ sub save_as_pdf {
     #    chdir $1 or croak "can't chdir to $1: $!";
     #}
 
-    if ( $self->get_pdf_generator eq 'latex' ) {
+    if ( $self->pdf_generator eq 'latex' ) {
         $self->generate_pdf_using_latex( $filename, $original_dir );
     }
     elsif( $self->get_pdf_generator eq 'prince' ) {
@@ -527,40 +509,40 @@ sub save_as_pdf {
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-sub create_appendix {
-    my $self = shift;
-
-    return $appendix_of[ $$self ] if $appendix_of[ $$self ];
-
-    my $appendix = $root_of[ $$self ]->new( 'appendix' );
-    $appendix->setAttribute(  id => 'appendix-'.$self->unique_id );
-    
-    $root_of[ $$self ]->appendChild( $appendix );
-
-    my $label = $appendix->new( 'title' );
-    $label->appendText( 'Appendix' );
-    $appendix->appendChild( $label );
-}
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-sub get_appendix {
-    my ( $self, $create_if_missing ) = @_;
-
-    return $create_if_missing ? $self->create_appendix : $appendix_of[ $$self ];
-}
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-sub _add_to_appendix {
-    my ( $self, @nodes ) = @_;
-
-    my $appendix = $self->get_appendix(1);
-
-    $appendix->appendChild( $_ ) for @nodes;
-
-    return $self;
-}
+#sub create_appendix {
+#    my $self = shift;
+#
+#    return $appendix_of[ $$self ] if $appendix_of[ $$self ];
+#
+#    my $appendix = $self->root->new( 'appendix' );
+#    $appendix->setAttribute(  id => 'appendix-'.$self->unique_id );
+#    
+#    $self->root->appendChild( $appendix );
+#
+#    my $label = $appendix->new( 'title' );
+#    $label->appendText( 'Appendix' );
+#    $appendix->appendChild( $label );
+#}
+#
+##~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#
+#sub get_appendix {
+#    my ( $self, $create_if_missing ) = @_;
+#
+#    return $create_if_missing ? $self->create_appendix : $appendix_of[ $$self ];
+#}
+#
+##~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#
+#sub _add_to_appendix {
+#    my ( $self, @nodes ) = @_;
+#
+#    my $appendix = $self->get_appendix(1);
+#
+#    $appendix->appendChild( $_ ) for @nodes;
+#
+#    return $self;
+#}
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
