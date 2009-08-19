@@ -2,6 +2,7 @@ package Pod::Manual;
 
 use MooseX::SemiAffordanceAccessor;
 use Moose;
+use Moose::Util::TypeConstraints;
 use MooseX::Method::Signatures;
 use MooseX::AttributeHelpers;
 
@@ -21,6 +22,7 @@ use List::MoreUtils qw/ any /;
 use Params::Validate;
 
 our $VERSION = '0.08_04';
+#$File::Temp::KEEP_ALL = 1;  #save temp files while debugging.
 
 has parser => ( is => 'ro', default => sub { XML::LibXML->new } );
 has dom => ( is => 'ro', 
@@ -77,9 +79,17 @@ has prince_css => ( is => 'rw',
     },
 );
 
+subtype 'ArrayRefOfStrs'
+    => as 'ArrayRef[Str]';
+
+coerce 'ArrayRefOfStrs'
+    => from 'Str'
+    => via { [ $_ ] };
+
 has ignore_sections => (
     metaclass => 'Collection::Array',
-    isa => 'ArrayRef[Str]',
+    isa => 'ArrayRefOfStrs',
+    coerce => 1,
     default => sub { [] },
     provides => {
         elements => 'ignore_sections',
@@ -186,7 +196,7 @@ sub add_chapter {
 
     my %option = validate( @_, {
             ignore_sections   => { default => [ $self->ignore_sections ] },
-#            appendix_sections => { default => [ $self->get_appendix_sections ] },
+#            appendix_sections => { default => [ $self->appendix_sections ] },
             set_title => 0,
         } );
 
@@ -495,7 +505,7 @@ sub save_as_pdf {
     if ( $self->pdf_generator eq 'latex' ) {
         $self->generate_pdf_using_latex( $filename, $original_dir );
     }
-    elsif( $self->get_pdf_generator eq 'prince' ) {
+    elsif( $self->pdf_generator eq 'prince' ) {
         $self->generate_pdf_using_prince( $filename, $original_dir );
     }
 
@@ -526,18 +536,10 @@ sub save_as_pdf {
 #
 ##~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #
-#sub get_appendix {
-#    my ( $self, $create_if_missing ) = @_;
-#
-#    return $create_if_missing ? $self->create_appendix : $appendix_of[ $$self ];
-#}
-#
-##~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#
 #sub _add_to_appendix {
 #    my ( $self, @nodes ) = @_;
 #
-#    my $appendix = $self->get_appendix(1);
+#    my $appendix = $self->appendix(1);
 #
 #    $appendix->appendChild( $_ ) for @nodes;
 #
@@ -552,7 +554,7 @@ sub local_prince_css {
 
     my $css;
 
-    if ( my $prince = $self->get_prince_css ) {
+    if ( my $prince = $self->prince_css ) {
         $css = qq{\@import '$prince';\n};
     }
 
@@ -777,16 +779,6 @@ Returns 1 if the pdf has been created, 0 otherwise.
 B<NOTE>: this function requires to have 
 TeTeX installed and I<pdflatex> accessible
 via the I<$PATH>.
-
-=head2 set_pdf_generator( $generator )
-
-Sets the pdf generation engine to be used.  Can be C<latex> 
-(the default) or C<prince>.
-
-=head2 get_pdf_generator
-
-Returns the pdf generation engine used by the object.
-
 
 =head1 BUGS AND LIMITATIONS
 

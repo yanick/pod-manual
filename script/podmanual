@@ -40,6 +40,9 @@ if( none { $_ eq $format } @allowed_formats ) {
         "valid formats: ", join " ", @allowed_formats, "\n";
 }
 
+#Set the first podfile name as title if not set by option
+$title ||= ( @ARGV ? $ARGV[0] : 'Untitled');
+
 my $manual = Pod::Manual->new(
     title         => $title,
     pdf_generator => $pdf_gen

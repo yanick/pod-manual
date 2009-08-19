@@ -8,3 +8,4 @@ blib
 *.swo
 Makefile
 *.tar
+*~
