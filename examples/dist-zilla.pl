@@ -1,40 +1,30 @@
 #!/usr/bin/perl 
 
-package Moose::PodManual;
+package Dist::Zilla::Plugins::PodManual;
 
 use strict;
 use warnings;
 
 use Moose;
-use Pod::Manual;
 
 extends 'Pod::Manual';
 
+use Module::Pluggable search_path => ['Dist::Zilla::Plugin'];
+
+
 my $manual = __PACKAGE__->master;
 
-$manual->title( 'Moose' );
+$manual->title( 'Dist::Zilla Plugins' );
 
-$manual->ignore([ 'FOO' ]);
+$manual->ignore([ 'VERSION' ]);
 
 $manual->move_one_to_appendix([ 'COPYRIGHT AND LICENSE' ]);
 
-$manual->add_module([qw/
-      Moose::Intro
-      Moose::Manual
-      Moose::Manual::Concepts
-      Moose::Manual::Classes
-      Moose::Manual::Attributes
-      Moose::Manual::Delegation
-      Moose::Manual::Construction
-      Moose::Manual::MethodModifiers
-      Moose::Manual::Roles
-      Moose::Manual::Types
-      Moose::Manual::MOP
-      Moose::Manual::MooseX
-      Moose::Manual::BestPractices
-      /]);
+$manual->add_module( [ $manual->plugins ] );
 
 $manual;
+
+print $manual->as_docbook( css => '+/prince.css' );
 
 __END__
 

@@ -1,10 +1,12 @@
 package Pod::Manual;
 
-use MooseX::SemiAffordanceAccessor;
 use Moose;
+
 use Moose::Util::TypeConstraints;
 use MooseX::Method::Signatures;
 use MooseX::AttributeHelpers;
+
+use Pod::Manual::Types qw/ ChapterType /;
 
 use warnings;
 no warnings qw/ uninitialized /;
@@ -18,13 +20,18 @@ use Pod::2::DocBook;
 use Pod::Find qw/ pod_where /;
 use File::Temp qw/ tempfile tempdir /;
 use File::Copy;
+use File::chdir;
 use List::MoreUtils qw/ any /;
 use Params::Validate;
+use File::ShareDir ':ALL';
+
+with 'Pod::Manual::Formatter::DocBook';
 
 our $VERSION = '0.08_04';
 #$File::Temp::KEEP_ALL = 1;  #save temp files while debugging.
 
-has parser => ( is => 'ro', default => sub { XML::LibXML->new } );
+has parser => ( is => 'ro', default => sub { XML::LibXML->new( expand_entities
+=> 0 )} );
 has dom => ( is => 'ro', 
     lazy => 1,
     default => sub {
@@ -35,10 +42,9 @@ has dom => ( is => 'ro',
             . '</title></bookinfo></book>' 
     );
 
-        $dom->setEncoding( 'iso-8859-1' );
+        $dom->setEncoding( 'UTF-8' );
         $dom;
     });
-has appendix => ( is => 'rw' );
 has root => ( is => 'ro',
     lazy => 1,
     default => sub {
@@ -61,22 +67,20 @@ has title => (
 );
 has unique_id => ( 
     is => 'ro',
-    metaclass => 'Counter',
     isa => 'Num',
-    default => 0,
-    trigger => sub {
-        my $self = shift;
-        $self->unique_id->inc;
-    },
+    default => 1,
     );
-has prince_css => ( is => 'rw',
-    default => sub {
+
+
+
+after unique_id => sub {
         my $self = shift;
-        my ($css) = grep { -f $_ }
-                    map  { $_ . '/lib/prince/style/docbook.css' } 
-                         qw# /usr /usr/local #;
-        return $css;
-    },
+        $self->{unique_id}++;
+};
+
+has css => (
+    is => 'rw',
+    default =>  dist_file( 'Pod-Manual', 'docbook.css' ),
 );
 
 subtype 'ArrayRefOfStrs'
@@ -86,15 +90,41 @@ coerce 'ArrayRefOfStrs'
     => from 'Str'
     => via { [ $_ ] };
 
-has ignore_sections => (
+has ignore => (
+    is => 'rw',
     metaclass => 'Collection::Array',
     isa => 'ArrayRefOfStrs',
     coerce => 1,
+    auto_deref => 1,
     default => sub { [] },
     provides => {
-        elements => 'ignore_sections',
+        find => '_find_ignore',    
     },
 );
+
+sub is_ignored {
+    my $self = shift;
+    my $section = shift;
+    return $self->_find_ignore( sub { $section eq $_[0] } );
+}
+
+has move_one_to_appendix => (
+    is => 'rw',
+    metaclass => 'Collection::Array',
+    isa => 'ArrayRefOfStrs',
+    coerce => 1,
+    auto_deref => 1,
+    default => sub { [] },
+    provides => {
+        find => '_is_in_move_one_in_appendix',    
+    },
+);
+
+sub is_in_move_one_in_appendix {
+    my $self = shift;
+    my $section = shift;
+    return $self->_is_in_move_one_in_appendix( sub { $section eq $_[0] } )
+}
 
 #has appendix_sections => (
 #    metaclass => 'Collection::Array',
@@ -112,11 +142,49 @@ has pdf_generator => (
     default => 'latex',
 );
 
+
+sub appendix {
+    my $self = shift;
+
+    # blerk, rework
+    my @app = $self->dom->findnodes( '/book/appendix' );
+
+    return @app ? $app[0] : undef;
+
+}
+
+sub create_appendix {
+    my $self = shift;
+    my $root = $self->root;
+
+    my $appendix = $self->appendix;
+
+    return $appendix if $appendix;
+
+    $appendix = $root->new( 'appendix' );
+
+    $appendix->setAttribute(  id => 'appendix-'.$self->unique_id );
+    
+    $self->root->appendChild( $appendix );
+
+    my $label = $appendix->new( 'title' );
+    $label->appendText( 'Appendix' );
+    $appendix->appendChild( $label );
+
+    return $appendix;
+}
+
+sub add_to_appendix {
+    my $self = shift;
+    $self->create_appendix->appendChild( shift );
+}
+
+sub appendix_section_titles {
+    my $self = shift;
+    return map { $_->findvalue( 'text()' ) }
+        $self->dom->findnodes( '/book/appendix/section/title' );
+}
                       
-### Special accessors ##########################################
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
 sub _find_module_pod {
     my $self = shift;
     my $module = shift;
@@ -144,6 +212,16 @@ sub _convert_pod_to_xml {
     open STDOUT, '>', \$podxml;
     open my $input_fh, '<', \$pod;
     $parser->parse_from_filehandle( $input_fh );
+
+    use HTML::Entities ();
+    use utf8;
+    
+    my %e2c = %HTML::Entities::entity2char;
+    delete @e2c{qw/ amp lt quot apos/}; # 'gt' makes Perl crash? wtf?
+
+    HTML::Entities::_decode_entities( $podxml, \%e2c );
+
+    utf8::encode( $podxml );
 
     my $dom = eval { 
         $self->parser->parse_string( $podxml ) 
@@ -178,28 +256,110 @@ sub _get_podxml {
     return $dom;
 }
 
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-sub add_chapters { 
+sub add_module {
     my $self = shift;
-    my $options = 'HASH' eq ref $_[-1] ?   pop @_ : { };
+    my $module = shift;
+    my $arg = shift;
 
-    $self->add_chapter( $_ => $options ) for @_;
+    if ( ref $module eq 'ARRAY' ) {
+        $self->add_module( $_, $arg ) for @$module;
+        return;
+    }
+
+    my $podxml = $self->_convert_pod_to_xml( $self->_find_module_pod( $module ) );
+
+    my $dom = $self->dom;
+
+    my $subdoc = $podxml->documentElement;
+
+    # give the chapter an id if there isn't
+    unless ( $subdoc->getAttribute( 'id' ) ) {
+        $subdoc->setAttribute( 'id' => 'chapter-'.$self->unique_id );
+    }
+
+    # fudge the id of the sections as well
+    for my $s ( $subdoc->findnodes( '//section' ) ) {
+        $s->setAttribute( id => 'section-'.$self->unique_id );
+    }
+
+    # fix the title
+    if ( my ( $node ) = $subdoc->findnodes( 'section[title/text()="NAME"]' ) ) {
+        my $title = $node->findvalue( 'para/text()' );
+        my ( $title_node ) = $subdoc->findnodes( 'title' );
+        $title_node->appendText( $title );
+        if ( $title =~ /-/ ) {
+            my ( $short ) = split /\s*-\s*/, $title;
+
+            my $abbrev = $title_node->ownerDocument->createElement( 'titleabbrev' );
+            $abbrev->appendText( $short );
+
+            $title_node->appendChild( $abbrev );
+        }
+        $node->unbindNode;
+    }
+
+    # trash sections we don't want to see
+    for my $section ( $subdoc->findnodes( 'section' ) ) {
+        my $title = $section->findvalue( 'title/text()' );
+
+        $section->unbindNode if $self->is_ignored( $title );
+    }
+    
+    # give abbreviations to all section titles
+    for my $title ( $subdoc->findnodes( 'section/title' ) ) {
+        next if $title->findnodes( 'titleabbrev' );  #already there
+        my $abbrev = $title->ownerDocument->createElement( 'titleabbrev' );
+        my $text = $title->toString;
+        $title->appendChild( $abbrev );
+        # FIXME
+        $text =~ s/^<.*?>//;
+        $text =~ s#</.*?>$##;
+        if ( length( $text ) > 20 ) {
+            # heuristics... *cross fingers*
+            $text =~ s/\s+-.*$//;  # something - like this
+            $text =~ s/\(.*?\)/( ... )/;
+        }
+        $abbrev->appendText( $text );
+    }
+
+    # move sections to appendix
+    for my $section ( $subdoc->findnodes( 'section' ) ) {
+        my $title = $section->findvalue( 'title/text()' );
+
+        if ( $self->is_in_move_one_in_appendix( $title ) 
+        ) {
+            $DB::single = 1;
+            if( grep { $title eq $_ } $self->appendix_section_titles ) {
+                $section->unbindNode;
+            }
+            else {
+                $self->create_appendix->appendChild( $section );
+            }
+        }
+    }
+    
+
+    # use the title of that section if the 'doc_title' option is
+    # used, or if there are no title given yet
+#    if ( $option{set_title} or not defined $self->title ) {
+#        my $title = $subdoc->findvalue( '/chapter/title/text()' );
+#        $title =~ s/\s*-.*//;  # remove desc after the '-'
+#        $self->set_title( $title ) if $title;
+#    }
+
+
+    $dom->adoptNode( $subdoc );
+
+    # if there is no appendix, it adds the chapter
+    # at the end of the document
+    $self->root->insertBefore( $subdoc, $self->appendix );
+
 }
 
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+method add_chapter ( ChapterType $type!, Str $chapter!, $attr? ) {
 
-
-sub add_chapter {
-    my $self = shift;
-    my $chapter = shift;
-
-    my %option = validate( @_, {
-            ignore_sections   => { default => [ $self->ignore_sections ] },
-#            appendix_sections => { default => [ $self->appendix_sections ] },
-            set_title => 0,
-        } );
-
+    my %option;
     # simplify things later
     for my $i ( qw/ ignore_sections appendix_sections / ) {
         unless ( ref $option{ $i } ) {
@@ -325,49 +485,6 @@ sub as_dom {
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-sub as_docbook {
-    my $self = shift;
-    my %option = ref $_[0] eq 'HASH' ? %{ $_[0] } : () ;
-
-    # generate the toc
-    $self->generate_toc;
-
-    my $dom = $self->dom;
-
-    if ( my $css = $option{ css } ) {
-        # make a copy of the dom so that we're not stuck with the PI
-        $dom = $self->parser->parse_string( $dom->toString );
-
-        my $pi = $dom->createPI( 'xml-stylesheet' 
-                                    => qq{href="$css" type="text/css"} );
-        $dom->insertBefore( $pi, $dom->firstChild );
-    }
-
-
-    return $dom->toString;
-}
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-sub generate_toc {
-    my $self = shift;
-    my $dom = $self->dom;
-
-    # if there's already a toc, nuke it
-    for ( $dom->findnodes( 'toc' ) ) {
-        $_->unbindNode;
-    }
-
-    my $toc = $dom->createElement( 'toc' );
-    my ( $bookinfo ) = $dom->findnodes( '/book/bookinfo' );
-    $bookinfo->parentNode->insertAfter( $toc, $bookinfo );
-
-    for my $chapter ( $dom->findnodes( '/book/chapter' ),
-                      $dom->findnodes( '/book/appendix' ) ) {
-        $self->add_entry_to_toc( 0, $toc, $chapter );
-    }
-}
-
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 sub tag_content {
@@ -399,70 +516,6 @@ sub add_entry_to_toc {
         $self->add_entry_to_toc( $level + 1, $tocchap, $child );
     }
 }
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-sub as_latex {
-    my $self = shift;
-
-    eval {
-        require XML::XPathScript;
-        require Pod::Manual::Docbook2LaTeX;
-    };
-
-    croak 'as_latex() requires module XML::XPathScript to be installed'
-        if $@;
-
-    my $xps = XML::XPathScript->new;
-
-    my $docbook = eval { $xps->transform( 
-         $self->as_docbook => $Pod::Manual::Docbook2LaTeX::stylesheet
-    ) } ;
-
-    croak "couldn't convert to docbook: $@" if $@;
-
-    return $docbook;
-}
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-sub generate_pdf_using_prince {
-    my ( $self, $filename ) = @_;
-
-    # if no css, we must create our own
-
-    my $docbook = $self->as_docbook({ css =>  
-            $self->local_prince_css( '.' ) });
-
-    open my $db_fh, '>', 'manual.docbook'
-        or croak "can't open file 'manual.docbook' for writing: $!";
-
-    print $db_fh $docbook;
-    close $db_fh;
-
-    system 'prince', 'manual.docbook', '-o', 'manual.pdf';
-}
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-sub generate_pdf_using_latex {
-    my ( $self ) = @_;
-
-   my $latex = $self->as_latex;
-
-   open my $latex_fh, '>', 'manual.tex' 
-       or croak "can't write to 'manual.tex': $!";
-   print {$latex_fh} $latex;
-   close $latex_fh;
-
-    for ( 1..2 ) {       # two times to populate the toc
-        system "pdflatex -interaction=batchmode manual.tex > /dev/null";
-           # and croak "problem running pdflatex: $!";
-    }
-
-}
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 sub save_as_pdf {
     # TODO: add -force argument
@@ -502,13 +555,7 @@ sub save_as_pdf {
     #    chdir $1 or croak "can't chdir to $1: $!";
     #}
 
-    if ( $self->pdf_generator eq 'latex' ) {
-        $self->generate_pdf_using_latex( $filename, $original_dir );
-    }
-    elsif( $self->pdf_generator eq 'prince' ) {
-        $self->generate_pdf_using_prince( $filename, $original_dir );
-    }
-
+    $self->generate_pdf( $filename, $original_dir );
 
     chdir $original_dir;
 
@@ -519,23 +566,6 @@ sub save_as_pdf {
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-#sub create_appendix {
-#    my $self = shift;
-#
-#    return $appendix_of[ $$self ] if $appendix_of[ $$self ];
-#
-#    my $appendix = $self->root->new( 'appendix' );
-#    $appendix->setAttribute(  id => 'appendix-'.$self->unique_id );
-#    
-#    $self->root->appendChild( $appendix );
-#
-#    my $label = $appendix->new( 'title' );
-#    $label->appendText( 'Appendix' );
-#    $appendix->appendChild( $label );
-#}
-#
-##~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#
 #sub _add_to_appendix {
 #    my ( $self, @nodes ) = @_;
 #
@@ -548,123 +578,23 @@ sub save_as_pdf {
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-sub local_prince_css {
-    my $self = shift;
-    my $tempdir = shift;
+sub master {
+    my $class = shift;
+    $class = ref $class if ref $class;
 
-    my $css;
+       my $var = '$'.$class.'::master';
 
-    if ( my $prince = $self->prince_css ) {
-        $css = qq{\@import '$prince';\n};
+    my $master = eval $var;
+
+    unless ( $master ) {
+        $master = $class->new;
+
+        eval "$var = \$master";
     }
 
-    $css .= <<'END_CSS';
-bookinfo title {
-    font-size: 24pt;
-    text-align: center;
+    return $master;
 }
 
-tocentry { display: block;  }
-tocentry::after { content: leader(".") target-counter(attr(href), page); }
-
-toclevel1, toclevel2, toclevel3,
-toclevel4, toclevel5, toclevel6 { 
-    display: block;
-    position: inherit; 
-    padding-left: 20px; 
-}
-
-bookinfo > title {
-    string-set: doctitle content();
-}
-
-
-title {
-    string-set: currentSection content();
-}
-
-section > title {
-    margin-top: 5px;
-    font: 14pt;
-}
-
-chapter > section > title > titleabbrev,
-appendix > section > title > titleabbrev
-{ 
-    display: block; 
-    font: 10pt;
-    flow: static(currentSection);
-}
-
-chapter > title > titleabbrev,
-appendix > title > titleabbrev { 
-    display: block; 
-    font: 10pt;
-    text-align: left;
-    flow: static(currentChapter);
-}
-
-chapter > title > titleabbrev,
-appendix > title > titleabbrev {
-    string-set: currentChapter content();
-}
-
-@page:first { 
-    @top-left { content: normal }
-    @top-right { content: normal }
-    @bottom-left { content: normal }
-    @bottom-right { content: normal }
-}
-
-chapter > title::before {
-    display: none;
-}
-
-chapter > title,
-appendix > title {
-    text-align: left;
-}
-
-
-
-emphasis[role="italic"] {
-    font-style: italic;
-}
-
-
-@page { 
-    @bottom-left {
-        content: string(doctitle)
-    }
-    @bottom-right { 
-        content: counter(page);
-        font-style: italic
-    }
-    @top-right {
-        content: flow(currentSection);
-    }
-    @top-left {
-        content: flow(currentChapter);
-    }
-}
-
-appendix {
-    page-break-before: always;
-    display: block;
-}
-
-appendix > title {
-    font-size: 24pt;
-    font-weight: bold;
-}
-END_CSS
-
-    open my $css_fh, '>', 'docbook.css' 
-        or croak "can't open file docbook.css for writing: $!";
-    print $css_fh $css;
-
-    return 'docbook.css';
-}
 
 'end of Pod::Manual'; # Magic true value required at end of module
 
@@ -744,12 +674,6 @@ If true, uses the shortened title of the chapter as the title
 of the manual. 
 
 =back
-
-=head2 add_chapters( I<@modules>, \%options )
-
-    $manual->add_chapters( 'Some::Module', 'Some::Other::Module' )
-
-Adds the pod of several modules to the manual.
 
 =head2 as_docbook( { css => $filename } )
 

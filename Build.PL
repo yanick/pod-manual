@@ -35,6 +35,7 @@ my $builder = Module::Build->new(
             'http://rt.cpan.org/NoAuth/Bugs.html?Dist=Pod-Manual',
         },
     },
+    share_dir => 'share',
 );
 
 $builder->create_build_script();
